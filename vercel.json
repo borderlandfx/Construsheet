@@ -1,0 +1,14 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "regions": ["iad1"],
+  "env": {
+    "NEXT_PUBLIC_SUPABASE_URL": "Set in Vercel dashboard → Settings → Environment Variables",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "Set in Vercel dashboard → Settings → Environment Variables",
+    "NEXT_PUBLIC_APP_URL": "Set in Vercel dashboard → Settings → Environment Variables",
+    "SUPABASE_SERVICE_ROLE_KEY": "Set in Vercel dashboard → Settings → Environment Variables (mark as Secret)",
+    "ANTHROPIC_API_KEY": "Set in Vercel dashboard → Settings → Environment Variables (mark as Secret)"
+  }
+}
