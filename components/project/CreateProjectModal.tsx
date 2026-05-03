@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Plus, X, Loader2 } from "lucide-react";
 import type { Locale } from "@/lib/utils/i18n";
@@ -27,7 +27,7 @@ export default function CreateProjectModal({
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState<"USD" | "MXN">("MXN");
+  const [currency, setCurrency] = useState<"USD" | "MXN" | "COP">("MXN");
 
   function reset() {
     setName("");
@@ -41,6 +41,13 @@ export default function CreateProjectModal({
     setOpen(false);
     reset();
   }
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") close(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -232,24 +239,24 @@ export default function CreateProjectModal({
                   className="flex rounded-lg overflow-hidden"
                   style={{ border: "1px solid var(--cs-border)", display: "inline-flex", width: "100%" }}
                 >
-                  {(["MXN", "USD"] as const).map((c) => (
+                  {([
+                    { value: "MXN", label: "MXN — Peso mexicano" },
+                    { value: "USD", label: "USD — Dólar" },
+                    { value: "COP", label: "COP — Peso colombiano" },
+                  ] as const).map(({ value: c, label }) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => setCurrency(c)}
                       className="flex-1 py-2 text-sm font-medium font-dm-sans transition-all duration-150"
                       style={{
-                        background:
-                          currency === c
-                            ? "var(--cs-accent)"
-                            : "transparent",
-                        color:
-                          currency === c ? "#fff" : "var(--cs-muted)",
+                        background: currency === c ? "var(--cs-accent)" : "transparent",
+                        color: currency === c ? "#fff" : "var(--cs-muted)",
                         border: "none",
                         cursor: "pointer",
                       }}
                     >
-                      {c === "MXN" ? "MXN — Peso" : "USD — Dólar"}
+                      {label}
                     </button>
                   ))}
                 </div>

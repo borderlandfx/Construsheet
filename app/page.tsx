@@ -1,9 +1,16 @@
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import LandingPage from "@/components/landing/LandingPage";
 
-// The root URL redirects to /dashboard.
-// The middleware handles the auth check:
-//   – unauthenticated → /auth/login
-//   – authenticated   → /dashboard  (and this page is never rendered)
-export default function RootPage() {
-  redirect("/dashboard");
+export default async function RootPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  // Authenticated users go straight to the dashboard
+  if (user) redirect("/dashboard");
+
+  // Everyone else sees the marketing landing page
+  return <LandingPage />;
 }

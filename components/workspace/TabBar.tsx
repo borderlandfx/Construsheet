@@ -1,23 +1,25 @@
 "use client";
 
-import { Table2, BarChart3, GanttChartSquare } from "lucide-react";
+import { Table2, BarChart3, GanttChartSquare, Ruler, BarChart2 } from "lucide-react";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
-import { t } from "@/lib/utils/i18n";
 
-export type TabId = "apu" | "budget" | "gantt";
+export type TabId = "apu" | "budget" | "gantt" | "takeoff" | "reports";
 
 interface TabBarProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  counts?: Partial<Record<TabId, number>>;
 }
 
-const TABS: { id: TabId; icon: React.ElementType; labelKey: "apu" | "budget" | "gantt" }[] = [
-  { id: "apu",    icon: Table2,           labelKey: "apu"    },
-  { id: "budget", icon: BarChart3,        labelKey: "budget" },
-  { id: "gantt",  icon: GanttChartSquare, labelKey: "gantt"  },
+const TABS: { id: TabId; icon: React.ElementType; label: { es: string; en: string } }[] = [
+  { id: "apu",     icon: Table2,           label: { es: "APU",          en: "APU"      } },
+  { id: "budget",  icon: BarChart3,        label: { es: "Presupuesto",  en: "Budget"   } },
+  { id: "gantt",   icon: GanttChartSquare, label: { es: "Cronograma",   en: "Schedule" } },
+  { id: "takeoff", icon: Ruler,            label: { es: "Generadores",  en: "Takeoff"  } },
+  { id: "reports", icon: BarChart2,        label: { es: "Reportes",     en: "Reports"  } },
 ];
 
-export default function TabBar({ activeTab, onTabChange }: TabBarProps) {
+export default function TabBar({ activeTab, onTabChange, counts }: TabBarProps) {
   const { language } = useWorkspace();
 
   return (
@@ -42,18 +44,22 @@ export default function TabBar({ activeTab, onTabChange }: TabBarProps) {
             cursor: "pointer",
           }}
         >
-          {TABS.map(({ id, labelKey }) => (
-            <option key={id} value={id}>
-              {t(labelKey, language)}
-            </option>
-          ))}
+          {TABS.map(({ id, label }) => {
+            const n = counts?.[id];
+            return (
+              <option key={id} value={id}>
+                {language === "es" ? label.es : label.en}{n ? ` (${n})` : ""}
+              </option>
+            );
+          })}
         </select>
       </div>
 
       {/* ── Desktop: tab buttons (≥640px) ────────────────────── */}
       <div className="hidden sm:flex items-end gap-0 px-4">
-        {TABS.map(({ id, icon: Icon, labelKey }) => {
+        {TABS.map(({ id, icon: Icon, label }) => {
           const active = activeTab === id;
+          const count = counts?.[id];
           return (
             <button
               key={id}
@@ -81,7 +87,21 @@ export default function TabBar({ activeTab, onTabChange }: TabBarProps) {
               }}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
-              {t(labelKey, language)}
+              {language === "es" ? label.es : label.en}
+              {count != null && count > 0 && (
+                <span
+                  className="inline-flex items-center justify-center rounded-full font-dm-sans"
+                  style={{
+                    minWidth: 18, height: 18, padding: "0 5px",
+                    fontSize: "0.65rem", fontWeight: 600,
+                    background: active ? "rgba(249,115,22,0.18)" : "rgba(255,255,255,0.07)",
+                    color: active ? "var(--cs-accent)" : "var(--cs-muted)",
+                  }}
+                  aria-label={`${count} items`}
+                >
+                  {count}
+                </span>
+              )}
             </button>
           );
         })}

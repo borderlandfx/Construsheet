@@ -13,15 +13,21 @@ import {
 
 export type ToastVariant = "success" | "error" | "info";
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 export interface ToastItem {
   id: number;
   message: string;
   variant: ToastVariant;
+  action?: ToastAction;
 }
 
 interface ToastCtx {
   toasts: ToastItem[];
-  toast: (message: string, variant?: ToastVariant) => void;
+  toast: (message: string, variant?: ToastVariant, action?: ToastAction) => void;
   dismiss: (id: number) => void;
 }
 
@@ -42,11 +48,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const toast = useCallback(
-    (message: string, variant: ToastVariant = "info") => {
+    (message: string, variant: ToastVariant = "info", action?: ToastAction) => {
       const id = nextId++;
-      setToasts((prev) => [...prev, { id, message, variant }]);
-      // Auto-dismiss after 3 seconds
-      const timer = setTimeout(() => dismiss(id), 3000);
+      setToasts((prev) => [...prev, { id, message, variant, action }]);
+      // Auto-dismiss after 6 s when there's an action, 3 s otherwise
+      const delay = action ? 6000 : 3000;
+      const timer = setTimeout(() => dismiss(id), delay);
       timers.current.set(id, timer);
     },
     [dismiss]

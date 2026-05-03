@@ -17,14 +17,15 @@ function buildSystemPrompt(language: string, currency: string, unitSys: string):
   "code": "string (e.g. 03.01)",
   "description": "string",
   "unit": "string (e.g. ${metric ? "m³" : "ft³"})",
-  "overhead_pct": number,
-  "profit_pct": number,
   "materials": [{ "name": "string", "unit": "string", "qty": number, "unit_price": number }],
   "labor":     [{ "name": "string", "unit": "string", "qty": number, "unit_price": number }],
-  "equipment": [{ "name": "string", "unit": "string", "qty": number, "unit_price": number }],
-  "direct_cost": number,
-  "selling_price": number
+  "equipment": [{ "name": "string", "unit": "string", "qty": number, "unit_price": number }]
 }`;
+
+  const marketCtx =
+    currency === "COP"
+      ? (language === "es" ? "mercado colombiano (Bogotá/Medellín)" : "Colombian construction market (Bogotá/Medellín)")
+      : (language === "es" ? "mercado mexicano/colombiano" : "Mexican/Colombian construction market");
 
   if (language === "es") {
     return `Eres un ingeniero civil experto en construcción latinoamericana (México y Colombia), \
@@ -37,12 +38,9 @@ Esquema exacto:
 ${schema}
 
 Reglas:
-- Moneda: ${currency}. Usa precios actuales de mercado mexicano/colombiano.
+- Moneda: ${currency}. Usa precios actuales del ${marketCtx}.
 - Sistema de unidades: ${metric ? "métrico" : "imperial"} (${unitExamples}).
-- overhead_pct: entre 10 y 20 (típicamente 12). profit_pct: entre 5 y 15 (típicamente 5).
 - qty es la cantidad del recurso POR UNIDAD del concepto.
-- direct_cost = Σ(qty × unit_price) de materiales + mano de obra + equipo.
-- selling_price = direct_cost × (1 + overhead_pct/100 + profit_pct/100).
 - Incluye TODOS los insumos necesarios; arrays vacíos [] si no aplica la categoría.
 - No incluyas ningún texto fuera del JSON.`;
   }
@@ -57,12 +55,9 @@ Exact schema:
 ${schema}
 
 Rules:
-- Currency: ${currency}. Use real Mexican/Colombian construction market prices.
+- Currency: ${currency}. Use real ${marketCtx} prices.
 - Unit system: ${metric ? "metric" : "imperial"} (${unitExamples}).
-- overhead_pct: 10–20 (typically 12). profit_pct: 5–15 (typically 5).
 - qty is the quantity of the resource PER UNIT of the activity.
-- direct_cost = Σ(qty × unit_price) across materials + labor + equipment.
-- selling_price = direct_cost × (1 + overhead_pct/100 + profit_pct/100).
 - Include ALL required resources; use empty arrays [] if a category does not apply.
 - Do not include any text outside the JSON.`;
 }
@@ -103,7 +98,8 @@ export async function POST(request: NextRequest) {
   try {
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
-      max_tokens: 2048,
+      max_tokens: 4096,
+      temperature: 0.3,   // lower = more consistent JSON + prices
       system: buildSystemPrompt(language, currency, unitSys),
       messages: [{ role: "user", content: prompt.trim() }],
     });

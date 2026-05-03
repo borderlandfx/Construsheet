@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus, Trash2, Pencil, Loader2, X,
-  Search, ArrowLeft, BookOpen,
+  Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
+import { useToast } from "@/lib/context/ToastContext";
 import { t } from "@/lib/utils/i18n";
-import type { ApuItem, ApuLineItem } from "@/lib/types/database.types";
+import type { ApuItem, ApuLineItem, ProjectIndirectCosts } from "@/lib/types/database.types";
 import {
   MATERIALS_DB, CATEGORY_LABELS,
   type MaterialCategory, type MaterialEntry,
@@ -16,15 +17,97 @@ import {
 import type { Locale } from "@/lib/utils/i18n";
 import { useAIAPU } from "@/lib/hooks/useAIAPU";
 
-// ─── shared style primitives ──────────────────────────────────────────────────
+// ─── APU Categories (Insucons.com standard) ─────────────────────────────────
+
+export const APU_CATEGORIES = [
+  "ACABADOS", "AIRE ACONDICIONADO", "ALBAÑILERIA", "ALCANTARILLADO", "ALUMBRADO",
+  "ALUMINIO", "CANALIZACIONES ESPECIALES ILUM. VARIOS", "CANCELERIA", "CARPINTERIA",
+  "CERRAJERIA", "CIMENTACION", "CONDULETS", "CONTROLES Y ARRANCADORES", "EDIFICACION",
+  "EQUIPO CONTRA INCENDIO", "ESTRUCTURA DE CONCRETO", "ESTRUCTURA METALICA", "HERRERIA",
+  "INSTALACION HIDRAULICA", "INSTALACIONES AGUA POTABLE", "INSTALACIONES DE GAS",
+  "INSTALACIONES ELECTRICAS", "INSTALACIONES SANITARIAS", "LIMPIEZA", "MANGUERAS FLEXIBLES",
+  "MOBILIARIO", "MOVIMIENTO DE TIERRAS", "MUEBLES SANITARIOS", "OBRA EXTERIOR",
+  "OBRAS PRELIMINARES", "PAVIMENTOS", "PISOS Y SUELOS", "POLOTES", "SOPORTERIA",
+  "TABLEROS E INTERRUPTORES", "TUBERIA CONDUIT Y CONEXIONES",
+  "TUBERIA Y CONEXIONES DE ACERO SOLDADO", "TUBERIA Y CONEXIONES DE COBRE",
+  "TUBERIA Y CONEXIONES DE PVC", "TUBERIA Y CONEXIONES NEGRA Y GALVANIZADA",
+  "VALVULAS Y LLAVES", "VIDRIOS, ACRILICOS Y ESPEJOS", "VOZ Y DATOS",
+] as const;
+
+export type ApuCategory = (typeof APU_CATEGORIES)[number];
+
+const CATEGORY_EN_MAP: Record<string, string> = {
+  "ACABADOS": "Finishes",
+  "AIRE ACONDICIONADO": "HVAC / Air Conditioning",
+  "ALBAÑILERIA": "Masonry",
+  "ALCANTARILLADO": "Sewage & Drainage",
+  "ALUMBRADO": "Lighting",
+  "ALUMINIO": "Aluminum Works",
+  "CANALIZACIONES ESPECIALES ILUM. VARIOS": "Special Conduit & Lighting",
+  "CANCELERIA": "Doors & Windows",
+  "CARPINTERIA": "Carpentry",
+  "CERRAJERIA": "Locksmith & Hardware",
+  "CIMENTACION": "Foundation",
+  "CONDULETS": "Conduit Fittings",
+  "CONTROLES Y ARRANCADORES": "Controls & Starters",
+  "EDIFICACION": "Building Works",
+  "EQUIPO CONTRA INCENDIO": "Fire Protection",
+  "ESTRUCTURA DE CONCRETO": "Concrete Structure",
+  "ESTRUCTURA METALICA": "Steel Structure",
+  "HERRERIA": "Ironwork",
+  "INSTALACION HIDRAULICA": "Hydraulic Installation",
+  "INSTALACIONES AGUA POTABLE": "Potable Water",
+  "INSTALACIONES DE GAS": "Gas Installations",
+  "INSTALACIONES ELECTRICAS": "Electrical",
+  "INSTALACIONES SANITARIAS": "Plumbing & Sanitary",
+  "LIMPIEZA": "Cleaning & Clearing",
+  "MANGUERAS FLEXIBLES": "Flexible Hoses",
+  "MOBILIARIO": "Furniture & Fixtures",
+  "MOVIMIENTO DE TIERRAS": "Earthworks",
+  "MUEBLES SANITARIOS": "Sanitary Fixtures",
+  "OBRA EXTERIOR": "Exterior Works",
+  "OBRAS PRELIMINARES": "Preliminary Works",
+  "PAVIMENTOS": "Pavements & Paving",
+  "PISOS Y SUELOS": "Flooring",
+  "POLOTES": "Piles & Deep Foundations",
+  "SOPORTERIA": "Support Structures",
+  "TABLEROS E INTERRUPTORES": "Panels & Breakers",
+  "TUBERIA CONDUIT Y CONEXIONES": "Conduit & Fittings",
+  "TUBERIA Y CONEXIONES DE ACERO SOLDADO": "Welded Steel Pipe",
+  "TUBERIA Y CONEXIONES DE COBRE": "Copper Pipe & Fittings",
+  "TUBERIA Y CONEXIONES DE PVC": "PVC Pipe & Fittings",
+  "TUBERIA Y CONEXIONES NEGRA Y GALVANIZADA": "Black & Galvanized Pipe",
+  "VALVULAS Y LLAVES": "Valves & Faucets",
+  "VIDRIOS, ACRILICOS Y ESPEJOS": "Glass, Acrylic & Mirrors",
+  "VOZ Y DATOS": "Voice & Data",
+};
+
+export function getCategoryLabel(cat: string | null | undefined, lang: Locale): string {
+  if (!cat) return "";
+  if (lang === "en" && CATEGORY_EN_MAP[cat]) return CATEGORY_EN_MAP[cat]!;
+  return cat;
+}
+
+// Stable color palette for category badges
+const CAT_COLORS = [
+  "#3b82f6","#22c55e","#f97316","#a855f7","#ec4899","#14b8a6","#eab308","#ef4444",
+  "#6366f1","#0ea5e9","#d946ef","#f43f5e","#84cc16","#06b6d4","#fb923c","#8b5cf6",
+];
+function categoryColor(cat: string): string {
+  let h = 0;
+  for (let i = 0; i < cat.length; i++) h = ((h * 31) + cat.charCodeAt(i)) >>> 0;
+  return CAT_COLORS[h % CAT_COLORS.length];
+}
+
+// ─── design tokens ────────────────────────────────────────────────────────────
 
 const CS = {
-  surface:  "var(--cs-surface)",
-  border:   "var(--cs-border)",
-  accent:   "var(--cs-accent)",
-  text:     "var(--cs-text)",
-  muted:    "var(--cs-muted)",
-  bg:       "var(--cs-bg)",
+  surface: "var(--cs-surface)",
+  border:  "var(--cs-border)",
+  accent:  "var(--cs-accent)",
+  text:    "var(--cs-text)",
+  muted:   "var(--cs-muted)",
+  bg:      "var(--cs-bg)",
 } as const;
 
 const cellInput: React.CSSProperties = {
@@ -40,13 +123,12 @@ const cellInput: React.CSSProperties = {
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
-interface EditorDraft {
+export interface EditorDraft {
   id: string | null;
   code: string;
   description: string;
   unit: string;
-  overheadPct: number;
-  profitPct: number;
+  category: string | null;
   materials: ApuLineItem[];
   labor: ApuLineItem[];
   equipment: ApuLineItem[];
@@ -57,14 +139,11 @@ const EMPTY_DRAFT: EditorDraft = {
   code: "",
   description: "",
   unit: "",
-  overheadPct: 12,
-  profitPct: 5,
+  category: null,
   materials: [],
   labor: [],
   equipment: [],
 };
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function itemToDraft(item: ApuItem): EditorDraft {
   return {
@@ -72,23 +151,137 @@ function itemToDraft(item: ApuItem): EditorDraft {
     code: item.code,
     description: item.description,
     unit: item.unit,
-    overheadPct: item.overhead_pct,
-    profitPct: item.profit_pct,
+    category: item.category ?? null,
     materials: (item.materials as ApuLineItem[]) ?? [],
     labor: (item.labor as ApuLineItem[]) ?? [],
     equipment: (item.equipment as ApuLineItem[]) ?? [],
   };
 }
 
-function calcCosts(draft: EditorDraft) {
-  const sumArr = (arr: ApuLineItem[]) =>
-    arr.reduce((s, r) => s + r.qty * r.unit_price, 0);
-  const direct = sumArr(draft.materials) + sumArr(draft.labor) + sumArr(draft.equipment);
-  const overhead = direct * draft.overheadPct / 100;
-  const profit   = direct * draft.profitPct  / 100;
-  return { direct, overhead, profit, selling: direct + overhead + profit };
+// ─── Safe formula evaluator ──────────────────────────────────────────────────
+
+function safeEval(expr: string): number | null {
+  const cleaned = expr.replace(/×/g, "*").replace(/÷/g, "/").replace(/,/g, ".").trim();
+  if (!/^[\d\s+\-*/^.()\n]+$/.test(cleaned)) return null;
+  if (cleaned === "" || cleaned === "0") return 0;
+  try {
+    const result = new Function(`"use strict"; return (${cleaned})`)() as unknown;
+    if (typeof result !== "number" || !isFinite(result) || result < 0) return null;
+    return Math.round(result * 1000) / 1000;
+  } catch { return null; }
 }
 
+// ─── QtyInput: text input with live formula preview ──────────────────────────
+
+function QtyInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [preview, setPreview] = useState<number | null>(null);
+  const ref = useRef<HTMLInputElement>(null);
+
+  function handleFocus() {
+    setDraft(value === 0 ? "" : String(value));
+    setPreview(null);
+    setEditing(true);
+    setTimeout(() => { ref.current?.select(); }, 0);
+  }
+
+  function handleChange(val: string) {
+    setDraft(val);
+    setPreview(safeEval(val));
+  }
+
+  function handleBlur() {
+    const evaled = safeEval(draft);
+    onChange(evaled !== null ? evaled : (parseFloat(draft) || 0));
+    setEditing(false);
+    setPreview(null);
+  }
+
+  const isFormula = editing && /[+\-*/×÷(]/.test(draft);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        ref={ref}
+        value={editing ? draft : (value || "")}
+        type="text"
+        inputMode="decimal"
+        placeholder="0"
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
+        style={{
+          ...({ background: "transparent", border: "none", outline: "none", color: "var(--cs-text)", fontFamily: "var(--font-dm-sans)", fontSize: "0.8125rem", width: "100%", padding: "0 2px", textAlign: "right" }),
+        }}
+      />
+      {isFormula && preview !== null && (
+        <span style={{
+          position: "absolute", right: 0, top: "50%", transform: "translateY(-50%) translateX(calc(100% + 4px))",
+          fontSize: "0.65rem", fontWeight: 700, color: "var(--cs-accent)", whiteSpace: "nowrap",
+          background: "var(--cs-surface)", border: "1px solid var(--cs-border)", borderRadius: 4,
+          padding: "1px 4px", pointerEvents: "none", zIndex: 10,
+        }}>
+          ={preview}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Insucons formula ─────────────────────────────────────────────────────────
+
+export interface CostCalc {
+  matSub: number;
+  labSub: number;
+  eqpSub: number;
+  matTotal: number;
+  labTotal: number;
+  eqpTotal: number;
+  directCost: number;
+  ggenVal: number;
+  pgas1Val: number;
+  pgas2Val: number;
+  netCost: number;
+  utilVal: number;
+  sellingPrice: number;
+  tot1Val: number;
+  tot2Val: number;
+  finalPrice: number;
+}
+
+export function calcCostsDetailed(draft: EditorDraft, s: ProjectIndirectCosts): CostCalc {
+  const sumArr = (arr: ApuLineItem[]) => arr.reduce((t, r) => t + r.qty * r.unit_price, 0);
+
+  const matSub  = sumArr(draft.materials);
+  const labSub  = sumArr(draft.labor);
+  const eqpSub  = sumArr(draft.equipment);
+
+  const matTotal   = matSub  * (1 + s.pmat1.pct / 100 + s.pmat2.pct / 100);
+  const labTotal   = labSub  * (1 + s.pmob1.pct / 100 + s.pmob2.pct / 100);
+  const eqpTotal   = eqpSub  * (1 + s.pmaq1.pct / 100 + s.pmaq2.pct / 100);
+  const directCost = matTotal + labTotal + eqpTotal;
+
+  const ggenVal  = directCost * s.ggen.pct  / 100;
+  const pgas1Val = directCost * s.pgas1.pct / 100;
+  const pgas2Val = directCost * s.pgas2.pct / 100;
+  const netCost  = directCost + ggenVal + pgas1Val + pgas2Val;
+
+  const utilVal     = netCost * s.util.pct / 100;
+  const sellingPrice = netCost + utilVal;
+
+  const tot1Val  = sellingPrice * s.tot1.pct / 100;
+  const tot2Val  = sellingPrice * s.tot2.pct / 100;
+  const finalPrice = sellingPrice + tot1Val + tot2Val;
+
+  return {
+    matSub, labSub, eqpSub,
+    matTotal, labTotal, eqpTotal,
+    directCost, ggenVal, pgas1Val, pgas2Val, netCost,
+    utilVal, sellingPrice, tot1Val, tot2Val, finalPrice,
+  };
+}
 
 // ─── LibraryModal ─────────────────────────────────────────────────────────────
 
@@ -109,10 +302,8 @@ function LibraryModal({ language, onInsert, onClose }: LibraryModalProps) {
   }, [onClose]);
 
   const filtered = MATERIALS_DB.filter(
-    (e) => e.category === tab &&
-      e.name.toLowerCase().includes(query.toLowerCase())
+    (e) => e.category === tab && e.name.toLowerCase().includes(query.toLowerCase())
   );
-
   const tabs: MaterialCategory[] = ["materials", "labor", "equipment"];
 
   return (
@@ -124,68 +315,44 @@ function LibraryModal({ language, onInsert, onClose }: LibraryModalProps) {
       <div
         className="flex flex-col w-full"
         style={{
-          maxWidth: 560,
-          maxHeight: "80vh",
-          background: CS.surface,
-          border: `1px solid ${CS.border}`,
-          borderRadius: 16,
-          overflow: "hidden",
+          maxWidth: 560, maxHeight: "80vh",
+          background: CS.surface, border: `1px solid ${CS.border}`,
+          borderRadius: 16, overflow: "hidden",
           boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
         }}
       >
-        {/* Header */}
-        <div
-          className="flex items-center justify-between px-5 py-4 shrink-0"
-          style={{ borderBottom: `1px solid ${CS.border}` }}
-        >
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: `1px solid ${CS.border}` }}>
           <div className="flex items-center gap-2">
             <BookOpen className="h-4 w-4" style={{ color: CS.accent }} />
             <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
               {language === "es" ? "Biblioteca de Precios" : "Price Library"}
             </span>
-            <span
-              className="text-xs font-dm-sans rounded-full px-2 py-0.5"
-              style={{ background: "rgba(249,115,22,0.12)", color: CS.accent }}
-            >
-              43
+            <span className="text-xs font-dm-sans rounded-full px-2 py-0.5" style={{ background: "rgba(249,115,22,0.12)", color: CS.accent }}>
+              {MATERIALS_DB.length}
             </span>
           </div>
-          <button
-            onClick={onClose}
-            aria-label={language === "es" ? "Cerrar" : "Close"}
-            style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}>
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Category tabs */}
         <div className="flex shrink-0" style={{ borderBottom: `1px solid ${CS.border}` }}>
           {tabs.map((cat) => {
             const cfg = CATEGORY_LABELS[cat];
             const active = tab === cat;
             return (
-              <button
-                key={cat}
-                onClick={() => setTab(cat)}
+              <button key={cat} onClick={() => setTab(cat)}
                 className="flex-1 py-2.5 text-xs font-semibold font-dm-sans transition-all"
                 style={{
                   background: active ? "rgba(255,255,255,0.04)" : "transparent",
-                  color: active ? cfg.color : CS.muted,
-                  border: "none",
+                  color: active ? cfg.color : CS.muted, border: "none",
                   borderBottom: active ? `2px solid ${cfg.color}` : "2px solid transparent",
-                  cursor: "pointer",
-                  marginBottom: -1,
+                  cursor: "pointer", marginBottom: -1,
                 }}
               >
                 {language === "es" ? cfg.es : cfg.en}
-                <span
-                  className="ml-1.5 rounded-full px-1.5 py-px text-[10px]"
-                  style={{
-                    background: active ? `${cfg.color}22` : "transparent",
-                    color: active ? cfg.color : CS.muted,
-                  }}
-                >
+                <span className="ml-1.5 rounded-full px-1.5 py-px text-[10px]"
+                  style={{ background: active ? `${cfg.color}22` : "transparent", color: active ? cfg.color : CS.muted }}>
                   {MATERIALS_DB.filter((e) => e.category === cat).length}
                 </span>
               </button>
@@ -193,104 +360,44 @@ function LibraryModal({ language, onInsert, onClose }: LibraryModalProps) {
           })}
         </div>
 
-        {/* Search */}
-        <div
-          className="flex items-center gap-2 px-4 py-2.5 shrink-0"
-          style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-        >
+        <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: CS.muted }} />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)}
             placeholder={language === "es" ? "Buscar..." : "Search..."}
-            className="flex-1 bg-transparent text-sm font-dm-sans outline-none"
-            style={{ color: CS.text }}
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
+            className="flex-1 bg-transparent text-sm font-dm-sans outline-none" style={{ color: CS.text }} />
+          {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}><X className="h-3 w-3" /></button>}
         </div>
 
-        {/* Items list */}
         <div className="flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
-            <p
-              className="text-center py-10 text-sm font-dm-sans"
-              style={{ color: CS.muted }}
-            >
-              {language === "es" ? "Sin resultados." : "No results."}
-            </p>
-          ) : (
-            <table className="w-full text-sm font-dm-sans">
-              <thead className="sticky top-0" style={{ background: CS.surface }}>
-                <tr style={{ borderBottom: `1px solid ${CS.border}` }}>
-                  <th
-                    className="text-left px-4 py-2 text-xs font-semibold"
-                    style={{ color: CS.muted }}
-                  >
-                    {language === "es" ? "Concepto" : "Description"}
-                  </th>
-                  <th
-                    className="text-left px-2 py-2 text-xs font-semibold w-16"
-                    style={{ color: CS.muted }}
-                  >
-                    {language === "es" ? "Unidad" : "Unit"}
-                  </th>
-                  <th
-                    className="text-right px-4 py-2 text-xs font-semibold w-28"
-                    style={{ color: CS.muted }}
-                  >
-                    {language === "es" ? "Precio Ref." : "Ref. Price"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((entry) => (
-                  <tr
-                    key={entry.id}
-                    className="group cursor-pointer"
-                    style={{ borderBottom: `1px solid ${CS.border}` }}
-                    onClick={() => { onInsert(entry, tab); onClose(); }}
-                  >
-                    <td
-                      className="px-4 py-2.5 group-hover:text-white transition-colors"
-                      style={{ color: CS.text }}
-                    >
-                      {entry.name}
-                    </td>
-                    <td
-                      className="px-2 py-2.5"
-                      style={{ color: CS.muted }}
-                    >
-                      {entry.unit}
-                    </td>
-                    <td
-                      className="px-4 py-2.5 text-right font-semibold transition-colors"
-                      style={{ color: CS.accent }}
-                    >
-                      ${entry.unit_price.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                    </td>
+          {filtered.length === 0
+            ? <p className="text-center py-10 text-sm font-dm-sans" style={{ color: CS.muted }}>{language === "es" ? "Sin resultados." : "No results."}</p>
+            : (
+              <table className="w-full text-sm font-dm-sans">
+                <thead className="sticky top-0" style={{ background: CS.surface }}>
+                  <tr style={{ borderBottom: `1px solid ${CS.border}` }}>
+                    <th className="text-left px-4 py-2 text-xs font-semibold" style={{ color: CS.muted }}>{language === "es" ? "Concepto" : "Description"}</th>
+                    <th className="text-left px-2 py-2 text-xs font-semibold w-16" style={{ color: CS.muted }}>{language === "es" ? "Unidad" : "Unit"}</th>
+                    <th className="text-right px-4 py-2 text-xs font-semibold w-28" style={{ color: CS.muted }}>{language === "es" ? "Precio Ref." : "Ref. Price"}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {filtered.map((entry) => (
+                    <tr key={entry.id} className="group cursor-pointer" style={{ borderBottom: `1px solid ${CS.border}` }}
+                      onClick={() => { onInsert(entry, tab); onClose(); }}>
+                      <td className="px-4 py-2.5 group-hover:text-white transition-colors" style={{ color: CS.text }}>{entry.name}</td>
+                      <td className="px-2 py-2.5" style={{ color: CS.muted }}>{entry.unit}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold" style={{ color: CS.accent }}>
+                        ${entry.unit_price.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
         </div>
 
-        {/* Footer hint */}
-        <div
-          className="px-4 py-2.5 text-xs font-dm-sans shrink-0"
-          style={{ color: CS.muted, borderTop: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-        >
-          {language === "es"
-            ? "Precios de referencia en MXN. Haz clic en cualquier ítem para insertarlo."
-            : "Reference prices in MXN. Click any item to insert it."}
+        <div className="px-4 py-2.5 text-xs font-dm-sans shrink-0" style={{ color: CS.muted, borderTop: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}>
+          {language === "es" ? "Precios de referencia en MXN. Haz clic en cualquier ítem para insertarlo." : "Reference prices in MXN. Click any item to insert it."}
         </div>
       </div>
     </div>
@@ -299,15 +406,23 @@ function LibraryModal({ language, onInsert, onClose }: LibraryModalProps) {
 
 // ─── AIModal ──────────────────────────────────────────────────────────────────
 
-interface AIModalProps {
-  onFill: (draft: Partial<EditorDraft>) => void;
-  onClose: () => void;
-}
+const AI_STEPS: Record<Locale, string[]> = {
+  es: ["Analizando concepto de obra…","Generando relación de materiales…","Calculando mano de obra…","Estimando equipo y maquinaria…","Calculando costos directos…","Verificando precios de mercado…","Aplicando factores de GG y utilidad…"],
+  en: ["Analyzing construction activity…","Building materials breakdown…","Calculating labor costs…","Estimating equipment…","Computing direct costs…","Verifying market prices…","Applying overhead & profit factors…"],
+};
 
-function AIModal({ onFill, onClose }: AIModalProps) {
+function AIModal({ onFill, onClose }: { onFill: (d: Partial<EditorDraft>) => void; onClose: () => void }) {
   const { language, currency, unitSys } = useWorkspace();
+  const lang = language as Locale;
   const [prompt, setPrompt] = useState("");
+  const [stepIdx, setStepIdx] = useState(0);
   const { generate, isLoading, error } = useAIAPU();
+
+  useEffect(() => {
+    if (!isLoading) { setStepIdx(0); return; }
+    const id = setInterval(() => setStepIdx((i) => (i + 1) % AI_STEPS[lang].length), 1600);
+    return () => clearInterval(id);
+  }, [isLoading, lang]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === "Escape" && !isLoading) onClose(); }
@@ -317,150 +432,87 @@ function AIModal({ onFill, onClose }: AIModalProps) {
 
   async function handleSubmit() {
     if (!prompt.trim() || isLoading) return;
-    const result = await generate({ prompt: prompt.trim(), language, currency, unitSys });
-    if (!result) return; // error state is set by the hook
-
+    const result = await generate({ prompt: prompt.trim(), language: lang, currency, unitSys });
+    if (!result) return;
     onFill({
-      code:        result.code        ?? "",
-      description: result.description ?? "",
-      unit:        result.unit        ?? "",
-      overheadPct: result.overhead_pct ?? 12,
-      profitPct:   result.profit_pct   ?? 5,
-      materials:   result.materials   ?? [],
-      labor:       result.labor       ?? [],
-      equipment:   result.equipment   ?? [],
+      code: result.code ?? "", description: result.description ?? "",
+      unit: result.unit ?? "",
+      materials: result.materials ?? [], labor: result.labor ?? [], equipment: result.equipment ?? [],
     });
     onClose();
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
-      onClick={(e) => e.target === e.currentTarget && !isLoading && onClose()}
-    >
-      <div
-        className="flex flex-col w-full gap-4"
-        style={{
-          maxWidth: 520,
-          background: CS.surface,
-          border: `1px solid ${CS.border}`,
-          borderRadius: 16,
-          padding: "1.5rem",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-        }}
-      >
-        {/* Header */}
+      onClick={(e) => e.target === e.currentTarget && !isLoading && onClose()}>
+      <div className="flex flex-col w-full gap-4"
+        style={{ maxWidth: 520, background: CS.surface, border: `1px solid ${CS.border}`, borderRadius: 16, padding: "1.5rem", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span style={{ color: CS.accent, fontSize: 18, lineHeight: 1 }}>✦</span>
-            <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
-              {language === "es" ? "Generar APU con IA" : "Generate APU with AI"}
-            </span>
+            <span style={{ color: CS.accent, fontSize: 18 }}>✦</span>
+            <span className="font-syne font-bold text-base" style={{ color: CS.text }}>{lang === "es" ? "Generar APU con IA" : "Generate APU with AI"}</span>
+            <span className="text-[10px] font-dm-sans rounded-full px-2 py-px" style={{ background: "rgba(249,115,22,0.12)", color: CS.accent }}>claude-sonnet</span>
           </div>
-          <button
-            onClick={onClose}
-            disabled={isLoading}
-            aria-label={language === "es" ? "Cerrar" : "Close"}
-            style={{ background: "none", border: "none", cursor: isLoading ? "not-allowed" : "pointer", color: CS.muted }}
-          >
+          <button onClick={onClose} disabled={isLoading} style={{ background: "none", border: "none", cursor: isLoading ? "not-allowed" : "pointer", color: CS.muted }}>
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Prompt */}
-        <div>
-          <label
-            className="block text-xs font-medium font-dm-sans mb-2"
-            style={{ color: CS.muted }}
-          >
-            {language === "es"
-              ? "Describe el concepto de obra:"
-              : "Describe the construction activity:"}
-          </label>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            disabled={isLoading}
-            rows={3}
-            placeholder={
-              language === "es"
-                ? "Ej: Colado de losa de concreto f'c 210 kg/cm², incluye cimbra y cura..."
-                : "E.g: Concrete slab f'c 210 kg/cm² including formwork and curing..."
-            }
-            className="w-full rounded-lg text-sm font-dm-sans resize-none"
-            style={{
-              padding: "0.6rem 0.75rem",
-              border: `1px solid ${CS.border}`,
-              background: "rgba(255,255,255,0.04)",
-              color: CS.text,
-              outline: "none",
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit();
-            }}
-          />
-          <p className="text-xs mt-1 font-dm-sans" style={{ color: CS.muted }}>
-            {language === "es" ? "⌘ Enter para enviar" : "⌘ Enter to submit"}
-          </p>
-        </div>
-
-        {/* Loading indicator */}
-        {isLoading && (
-          <div
-            className="flex items-center gap-3 rounded-lg px-4 py-3"
-            style={{ background: "rgba(249,115,22,0.08)", border: `1px solid rgba(249,115,22,0.2)` }}
-          >
-            <Loader2 className="h-4 w-4 animate-spin shrink-0" style={{ color: CS.accent }} />
-            <span className="text-sm font-dm-sans" style={{ color: CS.accent }}>
-              {language === "es" ? "Analizando concepto de obra…" : "Analyzing construction activity…"}
-            </span>
+        {!isLoading && (
+          <div>
+            <label className="block text-xs font-medium font-dm-sans mb-2" style={{ color: CS.muted }}>
+              {lang === "es" ? "Describe el concepto de obra:" : "Describe the construction activity:"}
+            </label>
+            <textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3}
+              placeholder={lang === "es" ? "Ej: Colado de losa de concreto f'c 210 kg/cm²…" : "E.g: Concrete slab f'c 3000 psi including formwork, rebar, and curing…"}
+              className="w-full rounded-lg text-sm font-dm-sans resize-none"
+              style={{ padding: "0.6rem 0.75rem", border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.04)", color: CS.text, outline: "none" }}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSubmit(); }} />
+            <p className="text-xs mt-1 font-dm-sans" style={{ color: CS.muted }}>{lang === "es" ? "⌘ Enter para enviar" : "⌘ Enter to submit"}</p>
           </div>
         )}
 
-        {error && (
-          <p className="text-sm font-dm-sans" style={{ color: "#ef4444" }}>{error}</p>
+        {isLoading && (
+          <div className="flex flex-col gap-3 rounded-xl px-5 py-5" style={{ background: "rgba(249,115,22,0.06)", border: `1px solid rgba(249,115,22,0.18)` }}>
+            <div className="flex items-center gap-3">
+              <span className="relative flex shrink-0" style={{ width: 20, height: 20 }}>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-40" style={{ background: CS.accent }} />
+                <span className="relative inline-flex rounded-full" style={{ width: 20, height: 20, background: "rgba(249,115,22,0.25)" }}>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin m-auto" style={{ color: CS.accent }} />
+                </span>
+              </span>
+              <span className="text-sm font-dm-sans font-medium" style={{ color: CS.accent }}>{AI_STEPS[lang][stepIdx]}</span>
+            </div>
+            <div className="flex items-center gap-1.5 pl-8">
+              {AI_STEPS[lang].map((_, i) => (
+                <span key={i} className="rounded-full transition-all duration-300"
+                  style={{ width: i === stepIdx ? 16 : 5, height: 5, background: i === stepIdx ? CS.accent : i < stepIdx ? "rgba(249,115,22,0.4)" : "rgba(249,115,22,0.15)" }} />
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Actions */}
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isLoading}
-            className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: isLoading ? "not-allowed" : "pointer",
-              opacity: isLoading ? 0.5 : 1,
-            }}
-          >
-            {t("cancel", language)}
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isLoading || !prompt.trim()}
-            className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{
-              background: CS.accent,
-              color: "#fff",
-              border: "none",
-              cursor: isLoading || !prompt.trim() ? "not-allowed" : "pointer",
-              opacity: isLoading || !prompt.trim() ? 0.6 : 1,
-            }}
-          >
-            {isLoading ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {language === "es" ? "Generando..." : "Generating..."}</>
-            ) : (
-              <><span style={{ fontSize: 14 }}>✦</span>
-                {language === "es" ? "Generar" : "Generate"}</>
-            )}
-          </button>
-        </div>
+        {error && !isLoading && (
+          <div className="rounded-lg px-4 py-3 text-sm font-dm-sans" style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#ef4444" }}>
+            <span className="font-semibold">Error: </span>{error}
+          </div>
+        )}
+
+        {!isLoading && (
+          <div className="flex gap-2 justify-end">
+            <button onClick={onClose} className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+              style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
+              {t("cancel", lang)}
+            </button>
+            <button onClick={handleSubmit} disabled={!prompt.trim()}
+              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+              style={{ background: CS.accent, color: "#fff", border: "none", cursor: !prompt.trim() ? "not-allowed" : "pointer", opacity: !prompt.trim() ? 0.55 : 1 }}>
+              <span style={{ fontSize: 14 }}>✦</span>
+              {lang === "es" ? "Generar APU" : "Generate APU"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -468,105 +520,58 @@ function AIModal({ onFill, onClose }: AIModalProps) {
 
 // ─── SectionTable ─────────────────────────────────────────────────────────────
 
-interface SectionTableProps {
-  section: MaterialCategory;
-  rows: ApuLineItem[];
-  language: Locale;
-  fmt: (n: number) => string;
-  onChange: (rows: ApuLineItem[]) => void;
-  onOpenLibrary: () => void;
-}
-
-function SectionTable({ section, rows, language, fmt, onChange, onOpenLibrary }: SectionTableProps) {
+function SectionTable({ section, rows, language, fmt, onChange, onOpenLibrary }:
+  { section: MaterialCategory; rows: ApuLineItem[]; language: Locale; fmt: (n: number) => string;
+    onChange: (rows: ApuLineItem[]) => void; onOpenLibrary: () => void }
+) {
   const cfg = CATEGORY_LABELS[section];
   const label = language === "es" ? cfg.es : cfg.en;
   const subtotal = rows.reduce((s, r) => s + r.qty * r.unit_price, 0);
 
-  function addRow() {
-    onChange([...rows, { name: "", unit: "", qty: 1, unit_price: 0 }]);
-  }
-
+  function addRow() { onChange([...rows, { name: "", unit: "", qty: 1, unit_price: 0 }]); }
   function updateRow(i: number, field: keyof ApuLineItem, val: string | number) {
     onChange(rows.map((r, idx) => (idx === i ? { ...r, [field]: val } : r)));
   }
-
-  function removeRow(i: number) {
-    onChange(rows.filter((_, idx) => idx !== i));
-  }
+  function removeRow(i: number) { onChange(rows.filter((_, idx) => idx !== i)); }
 
   return (
     <div style={{ marginBottom: "1.25rem" }}>
-      {/* Section header */}
-      <div
-        className="flex items-center justify-between px-4 py-2"
-        style={{
-          background: "rgba(255,255,255,0.03)",
-          borderTop: `2px solid ${cfg.color}`,
-          borderBottom: `1px solid ${CS.border}`,
-        }}
-      >
+      <div className="flex items-center justify-between px-4 py-2"
+        style={{ background: "rgba(255,255,255,0.03)", borderTop: `2px solid ${cfg.color}`, borderBottom: `1px solid ${CS.border}` }}>
         <div className="flex items-center gap-2">
-          <span
-            className="rounded-full"
-            style={{ width: 8, height: 8, background: cfg.color, display: "inline-block" }}
-          />
-          <span
-            className="text-xs font-semibold font-dm-sans uppercase tracking-wider"
-            style={{ color: cfg.color }}
-          >
-            {label}
-          </span>
+          <span className="rounded-full" style={{ width: 8, height: 8, background: cfg.color, display: "inline-block" }} />
+          <span className="text-xs font-semibold font-dm-sans uppercase tracking-wider" style={{ color: cfg.color }}>{label}</span>
           {rows.length > 0 && (
-            <span
-              className="text-xs font-dm-sans rounded-full px-2 py-px"
-              style={{ background: `${cfg.color}18`, color: cfg.color }}
-            >
-              {rows.length}
-            </span>
+            <span className="text-xs font-dm-sans rounded-full px-2 py-px" style={{ background: `${cfg.color}18`, color: cfg.color }}>{rows.length}</span>
           )}
         </div>
         <div className="flex items-center gap-3">
-          {rows.length > 0 && (
-            <span className="text-xs font-semibold font-dm-sans" style={{ color: CS.text }}>
-              {fmt(subtotal)}
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={onOpenLibrary}
-            className="flex items-center gap-1 text-xs font-dm-sans transition-colors"
+          {rows.length > 0 && <span className="text-xs font-semibold font-dm-sans" style={{ color: CS.text }}>{fmt(subtotal)}</span>}
+          <button type="button" onClick={onOpenLibrary} className="flex items-center gap-1 text-xs font-dm-sans transition-colors"
             style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
             <BookOpen className="h-3 w-3" />
             {language === "es" ? "Biblioteca" : "Library"}
           </button>
-          <button
-            type="button"
-            onClick={addRow}
-            className="flex items-center gap-1 text-xs font-dm-sans"
-            style={{ background: "none", border: "none", cursor: "pointer", color: cfg.color }}
-          >
+          <button type="button" onClick={addRow} className="flex items-center gap-1 text-xs font-dm-sans"
+            style={{ background: "none", border: "none", cursor: "pointer", color: cfg.color }}>
             <Plus className="h-3 w-3" />
             {language === "es" ? "Agregar" : "Add row"}
           </button>
         </div>
       </div>
 
-      {/* Table */}
       {rows.length > 0 ? (
         <table className="w-full text-sm font-dm-sans">
           <thead>
             <tr style={{ borderBottom: `1px solid ${CS.border}` }}>
-              {["Descripción / Description", "Unidad", "Cant.", "P.U.", "Parcial", ""].map((h, i) => (
-                <th
-                  key={i}
-                  className={`py-2 text-xs font-semibold ${i > 1 ? "text-right" : "text-left"} ${i === 0 ? "pl-4" : "px-3"}`}
-                  style={{ color: CS.muted }}
-                >
-                  {i < 5 ? h : ""}
-                </th>
+              {(language === "es"
+                ? ["Descripción", "Unidad", "Cant.", "P.U.", "Parcial", ""]
+                : ["Description", "Unit", "Qty", "Unit Price", "Subtotal", ""]
+              ).map((h, i) => (
+                <th key={i} className={`py-2 text-xs font-semibold ${i > 1 ? "text-right" : "text-left"} ${i === 0 ? "pl-4" : "px-3"}`}
+                  style={{ color: CS.muted }}>{i < 5 ? h : ""}</th>
               ))}
             </tr>
           </thead>
@@ -574,69 +579,26 @@ function SectionTable({ section, rows, language, fmt, onChange, onOpenLibrary }:
             {rows.map((row, i) => {
               const partial = row.qty * row.unit_price;
               return (
-                <tr
-                  key={i}
-                  className="group"
-                  style={{
-                    borderBottom: `1px solid ${CS.border}`,
-                    background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
-                  }}
-                >
+                <tr key={i} className="group"
+                  style={{ borderBottom: `1px solid ${CS.border}`, background: i % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)" }}>
                   <td className="pl-4 pr-2 py-2" style={{ minWidth: 180 }}>
-                    <input
-                      style={cellInput}
-                      value={row.name}
-                      placeholder={language === "es" ? "Concepto..." : "Description..."}
-                      onChange={(e) => updateRow(i, "name", e.target.value)}
-                    />
+                    <input style={cellInput} value={row.name} placeholder={language === "es" ? "Concepto..." : "Description..."} onChange={(e) => updateRow(i, "name", e.target.value)} />
                   </td>
                   <td className="px-3 py-2" style={{ width: 70 }}>
-                    <input
-                      style={cellInput}
-                      value={row.unit}
-                      placeholder="m³"
-                      onChange={(e) => updateRow(i, "unit", e.target.value)}
-                    />
+                    <input style={cellInput} value={row.unit} placeholder="m³" onChange={(e) => updateRow(i, "unit", e.target.value)} />
                   </td>
-                  <td className="px-3 py-2" style={{ width: 80 }}>
-                    <input
-                      style={{ ...cellInput, textAlign: "right" }}
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={row.qty || ""}
-                      placeholder="0"
-                      onChange={(e) => updateRow(i, "qty", parseFloat(e.target.value) || 0)}
-                    />
+                  <td className="px-3 py-2" style={{ width: 80, overflow: "visible" }}>
+                    <QtyInput value={row.qty} onChange={(v) => updateRow(i, "qty", v)} />
                   </td>
                   <td className="px-3 py-2" style={{ width: 100 }}>
-                    <input
-                      style={{ ...cellInput, textAlign: "right" }}
-                      type="number"
-                      min={0}
-                      step="any"
-                      value={row.unit_price || ""}
-                      placeholder="0.00"
-                      onChange={(e) => updateRow(i, "unit_price", parseFloat(e.target.value) || 0)}
-                    />
+                    <input style={{ ...cellInput, textAlign: "right" }} type="number" min={0} step="any"
+                      value={row.unit_price || ""} placeholder="0.00" onChange={(e) => updateRow(i, "unit_price", parseFloat(e.target.value) || 0)} />
                   </td>
-                  <td
-                    className="px-3 py-2 text-right font-semibold"
-                    style={{ width: 110, color: partial > 0 ? CS.text : CS.muted }}
-                  >
-                    {fmt(partial)}
-                  </td>
+                  <td className="px-3 py-2 text-right font-semibold" style={{ width: 110, color: partial > 0 ? CS.text : CS.muted }}>{fmt(partial)}</td>
                   <td className="px-3 py-2" style={{ width: 36 }}>
-                    <button
-                      type="button"
-                      onClick={() => removeRow(i)}
+                    <button type="button" onClick={() => removeRow(i)}
                       className="flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                      style={{
-                        width: 24, height: 24,
-                        background: "none", border: "none",
-                        cursor: "pointer", color: "#ef4444",
-                      }}
-                    >
+                      style={{ width: 24, height: 24, background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}>
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </td>
@@ -646,193 +608,188 @@ function SectionTable({ section, rows, language, fmt, onChange, onOpenLibrary }:
           </tbody>
         </table>
       ) : (
-        <div
-          className="px-4 py-3 text-xs font-dm-sans"
-          style={{ color: CS.muted, borderBottom: `1px solid ${CS.border}` }}
-        >
-          {language === "es"
-            ? "Sin renglones. Haz clic en Agregar o usa la Biblioteca."
-            : "No rows. Click Add or use the Library."}
+        <div className="px-4 py-3 text-xs font-dm-sans" style={{ color: CS.muted, borderBottom: `1px solid ${CS.border}` }}>
+          {language === "es" ? "Sin renglones. Haz clic en Agregar o usa la Biblioteca." : "No rows. Click Add or use the Library."}
         </div>
       )}
     </div>
   );
 }
 
-// ─── CostSummary ──────────────────────────────────────────────────────────────
+// ─── DetailedCostSummary ──────────────────────────────────────────────────────
 
-interface CostSummaryProps {
-  draft: EditorDraft;
-  fmt: (n: number) => string;
-  language: Locale;
-  onChange: (patch: Partial<Pick<EditorDraft, "overheadPct" | "profitPct">>) => void;
-}
+function DetailedCostSummary({ draft, settings, fmt, language }:
+  { draft: EditorDraft; settings: ProjectIndirectCosts; fmt: (n: number) => string; language: Locale }
+) {
+  const c = calcCostsDetailed(draft, settings);
+  const lang = language;
 
-function CostSummary({ draft, fmt, language, onChange }: CostSummaryProps) {
-  const { direct, overhead, profit, selling } = calcCosts(draft);
-
-  const pctInput: React.CSSProperties = {
-    width: 52,
-    padding: "2px 6px",
-    borderRadius: 6,
-    border: `1px solid ${CS.border}`,
-    background: "rgba(255,255,255,0.06)",
-    color: CS.text,
-    fontFamily: "var(--font-dm-sans)",
-    fontSize: "0.8125rem",
-    textAlign: "right",
-    outline: "none",
+  const rowStyle: React.CSSProperties = {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "3px 0", fontSize: "0.8rem", fontFamily: "var(--font-dm-sans)",
   };
+  const labelStyle: React.CSSProperties = { color: CS.muted };
+  const valueStyle: React.CSSProperties = { color: CS.text, fontWeight: 500 };
 
-  const col = (label: string, value: string, sub?: React.ReactNode, big?: boolean) => (
-    <div className="flex flex-col items-end gap-0.5">
-      <p className="text-xs font-dm-sans" style={{ color: CS.muted }}>{label}</p>
-      {sub && <div className="flex items-center gap-1">{sub}</div>}
-      <p
-        className={`font-dm-sans font-bold ${big ? "text-xl" : "text-sm"}`}
-        style={{ color: big ? CS.accent : CS.text }}
-      >
-        {value}
-      </p>
-    </div>
-  );
+  function Row({ label, pct, value, bold, accent: isAccent, indent }: { label: string; pct?: number; value: number; bold?: boolean; accent?: boolean; indent?: boolean }) {
+    return (
+      <div style={{ ...rowStyle, paddingLeft: indent ? 12 : 0 }}>
+        <span style={{ ...labelStyle, color: bold ? CS.text : CS.muted }}>
+          {label}{pct !== undefined && pct > 0 ? ` (${pct}%)` : ""}
+        </span>
+        <span style={{ ...valueStyle, color: isAccent ? CS.accent : bold ? CS.text : CS.text, fontWeight: bold ? 700 : 500, fontSize: bold ? "0.95rem" : "0.8rem" }}>
+          {fmt(value)}
+        </span>
+      </div>
+    );
+  }
+
+  function Divider() {
+    return <div style={{ height: 1, background: CS.border, margin: "4px 0" }} />;
+  }
 
   return (
-    <div
-      className="flex items-end justify-end gap-8 px-5 py-4 shrink-0 flex-wrap"
-      style={{
-        borderTop: `1px solid ${CS.border}`,
-        background: "rgba(249,115,22,0.04)",
-      }}
-    >
-      {col(
-        language === "es" ? "Costo Directo" : "Direct Cost",
-        fmt(direct),
-      )}
+    <div style={{ background: "rgba(249,115,22,0.03)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "1rem 1.25rem" }}>
+        {/* Cost build-up */}
+        <div>
+          <p className="text-xs font-syne font-bold mb-2 uppercase tracking-wider" style={{ color: CS.muted }}>
+            {lang === "es" ? "Desglose" : "Breakdown"}
+          </p>
+          <Row label={lang === "es" ? "Subtotal Materiales" : "Materials Subtotal"} value={c.matSub} />
+          {(settings.pmat1.pct > 0 || settings.pmat2.pct > 0) && (
+            <>
+              {settings.pmat1.pct > 0 && <Row label={settings.pmat1.label || (lang === "es" ? "Flete y acarreos" : "Freight & handling")} pct={settings.pmat1.pct} value={c.matSub * settings.pmat1.pct / 100} indent />}
+              {settings.pmat2.pct > 0 && <Row label={settings.pmat2.label || (lang === "es" ? "Merma y desperdicio" : "Waste & spoilage")} pct={settings.pmat2.pct} value={c.matSub * settings.pmat2.pct / 100} indent />}
+              <Row label={lang === "es" ? "Total materiales" : "Materials total"} value={c.matTotal} bold />
+            </>
+          )}
+          <Divider />
+          <Row label={lang === "es" ? "Subtotal Mano de Obra" : "Labor subtotal"} value={c.labSub} />
+          {(settings.pmob1.pct > 0 || settings.pmob2.pct > 0) && (
+            <>
+              {settings.pmob1.pct > 0 && <Row label={settings.pmob1.label || (lang === "es" ? "Seguridad y higiene" : "Safety & hygiene")} pct={settings.pmob1.pct} value={c.labSub * settings.pmob1.pct / 100} indent />}
+              {settings.pmob2.pct > 0 && <Row label={settings.pmob2.label || "pmob2"} pct={settings.pmob2.pct} value={c.labSub * settings.pmob2.pct / 100} indent />}
+              <Row label={lang === "es" ? "Total mano de obra" : "Labor total"} value={c.labTotal} bold />
+            </>
+          )}
+          <Divider />
+          <Row label={lang === "es" ? "Subtotal Equipos" : "Equipment subtotal"} value={c.eqpSub} />
+          {(settings.pmaq1.pct > 0 || settings.pmaq2.pct > 0) && (
+            <>
+              {settings.pmaq1.pct > 0 && <Row label={settings.pmaq1.label || (lang === "es" ? "Herramienta menor" : "Small tools")} pct={settings.pmaq1.pct} value={c.eqpSub * settings.pmaq1.pct / 100} indent />}
+              {settings.pmaq2.pct > 0 && <Row label={settings.pmaq2.label || "pmaq2"} pct={settings.pmaq2.pct} value={c.eqpSub * settings.pmaq2.pct / 100} indent />}
+              <Row label={lang === "es" ? "Total equipos" : "Equipment total"} value={c.eqpTotal} bold />
+            </>
+          )}
+        </div>
 
-      <div className="w-px self-stretch" style={{ background: CS.border }} />
-
-      {col(
-        language === "es" ? "Gastos Generales" : "Overheads",
-        fmt(overhead),
-        <>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            value={draft.overheadPct}
-            onChange={(e) => onChange({ overheadPct: parseFloat(e.target.value) || 0 })}
-            style={pctInput}
-          />
-          <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>%</span>
-        </>,
-      )}
-
-      {col(
-        language === "es" ? "Utilidad" : "Profit",
-        fmt(profit),
-        <>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={0.5}
-            value={draft.profitPct}
-            onChange={(e) => onChange({ profitPct: parseFloat(e.target.value) || 0 })}
-            style={pctInput}
-          />
-          <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>%</span>
-        </>,
-      )}
-
-      <div className="w-px self-stretch" style={{ background: CS.border }} />
-
-      {col(
-        language === "es" ? "Precio de Venta" : "Selling Price",
-        fmt(selling),
-        undefined,
-        true,
-      )}
+        {/* Aggregates */}
+        <div>
+          <p className="text-xs font-syne font-bold mb-2 uppercase tracking-wider" style={{ color: CS.muted }}>
+            {lang === "es" ? "Precio Unitario" : "Unit Price"}
+          </p>
+          <Row label={lang === "es" ? "Costo Directo (CD)" : "Direct Cost (DC)"} value={c.directCost} bold />
+          <Divider />
+          {settings.ggen.pct  > 0 && <Row label={settings.ggen.label  || (lang === "es" ? "Gastos generales y admin." : "General & admin expenses")} pct={settings.ggen.pct}  value={c.ggenVal}  indent />}
+          {settings.pgas1.pct > 0 && <Row label={settings.pgas1.label || "pgas1"}             pct={settings.pgas1.pct} value={c.pgas1Val} indent />}
+          {settings.pgas2.pct > 0 && <Row label={settings.pgas2.label || "pgas2"}             pct={settings.pgas2.pct} value={c.pgas2Val} indent />}
+          <Row label={lang === "es" ? "Costo Neto (CN)" : "Net Cost (NC)"} value={c.netCost} bold />
+          <Divider />
+          {settings.util.pct > 0 && <Row label={settings.util.label || (lang === "es" ? "Utilidad" : "Profit")} pct={settings.util.pct} value={c.utilVal} indent />}
+          <Row label={lang === "es" ? "Precio de Venta (PV)" : "Selling Price (SP)"} value={c.sellingPrice} bold />
+          {(settings.tot1.pct > 0 || settings.tot2.pct > 0) && (
+            <>
+              <Divider />
+              {settings.tot1.pct > 0 && <Row label={settings.tot1.label || "Impuesto 1"} pct={settings.tot1.pct} value={c.tot1Val} indent />}
+              {settings.tot2.pct > 0 && <Row label={settings.tot2.label || "Impuesto 2"} pct={settings.tot2.pct} value={c.tot2Val} indent />}
+            </>
+          )}
+          <Divider />
+          <div style={{ marginTop: 4, padding: "8px 10px", borderRadius: 10, background: "rgba(249,115,22,0.1)", border: `1px solid rgba(249,115,22,0.25)` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span className="text-xs font-syne font-bold" style={{ color: CS.text }}>
+                {lang === "es" ? "PRECIO UNITARIO FINAL" : "FINAL UNIT PRICE"}
+              </span>
+              <span className="font-syne font-bold text-2xl" style={{ color: CS.accent }}>
+                {fmt(c.finalPrice)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── APUEditor ────────────────────────────────────────────────────────────────
 
-interface APUEditorProps {
-  initialDraft: EditorDraft;
-  language: Locale;
-  currency: string;
-  fmt: (n: number) => string;
-  projectId: string;
-  onSaved: (item: ApuItem) => void;
-  onCancel: () => void;
-}
-
-function APUEditor({
-  initialDraft, language, currency: _currency, fmt, projectId, onSaved, onCancel,
-}: APUEditorProps) {
+function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId, projectSettings, onSaved, onCancel }:
+  { initialDraft: EditorDraft; language: Locale; currency: string; fmt: (n: number) => string;
+    projectId: string; projectSettings: ProjectIndirectCosts;
+    onSaved: (item: ApuItem) => void; onCancel: () => void }
+) {
   const supabase = createClient();
   const [draft, setDraft]         = useState<EditorDraft>(initialDraft);
   const [saving, setSaving]       = useState(false);
   const [showLibrary, setShowLib] = useState(false);
   const [showAI, setShowAI]       = useState(false);
+  const [aiFilled, setAIFilled]   = useState(false);
   const [libSection, setLibSection] = useState<MaterialCategory>("materials");
+  const [catOpen, setCatOpen]       = useState(false);
+  const [catSearch, setCatSearch]   = useState("");
+  const catRef = useRef<HTMLDivElement>(null);
 
-  // Patch helpers
-  const patch = useCallback(
-    (p: Partial<EditorDraft>) => setDraft((d) => ({ ...d, ...p })),
-    []
-  );
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !showLibrary && !showAI && !saving) {
+        if (catOpen) { setCatOpen(false); return; }
+        onCancel();
+      }
+    }
+    function onClickOutside(e: MouseEvent) {
+      if (catOpen && catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onClickOutside);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onClickOutside); };
+  }, [showLibrary, showAI, saving, onCancel, catOpen]);
 
-  function openLibraryFor(section: MaterialCategory) {
-    setLibSection(section);
-    setShowLib(true);
-  }
+  const patch = useCallback((p: Partial<EditorDraft>) => setDraft((d) => ({ ...d, ...p })), []);
+
+  function openLibraryFor(section: MaterialCategory) { setLibSection(section); setShowLib(true); }
 
   function handleLibInsert(entry: MaterialEntry, _cat?: MaterialCategory) {
     const row: ApuLineItem = { name: entry.name, unit: entry.unit, qty: 1, unit_price: entry.unit_price };
-    const key = libSection; // use the section that opened the library
-    patch({ [key]: [...(draft[key] as ApuLineItem[]), row] });
+    patch({ [libSection]: [...(draft[libSection] as ApuLineItem[]), row] });
   }
 
-  function handleAIFill(filled: Partial<EditorDraft>) {
-    patch(filled);
-  }
+  function handleAIFill(filled: Partial<EditorDraft>) { patch(filled); setAIFilled(true); }
 
   async function handleSave() {
     if (!draft.code.trim() || !draft.description.trim() || !draft.unit.trim()) return;
     setSaving(true);
-    const { direct, selling } = calcCosts(draft);
+    const c = calcCostsDetailed(draft, projectSettings);
     const payload = {
-      project_id:   projectId,
-      code:         draft.code.trim(),
-      description:  draft.description.trim(),
-      unit:         draft.unit.trim(),
-      materials:    draft.materials,
-      labor:        draft.labor,
-      equipment:    draft.equipment,
-      direct_cost:  direct,
-      overhead_pct: draft.overheadPct,
-      profit_pct:   draft.profitPct,
-      selling_price: selling,
+      project_id:    projectId,
+      code:          draft.code.trim(),
+      description:   draft.description.trim(),
+      unit:          draft.unit.trim(),
+      category:      draft.category || null,
+      materials:     draft.materials,
+      labor:         draft.labor,
+      equipment:     draft.equipment,
+      direct_cost:   c.directCost,
+      overhead_pct:  projectSettings.ggen.pct + projectSettings.pgas1.pct + projectSettings.pgas2.pct,
+      profit_pct:    projectSettings.util.pct,
+      selling_price: c.finalPrice,
     };
 
     let result;
     if (draft.id) {
-      result = await supabase
-        .from("apu_items")
-        .update(payload)
-        .eq("id", draft.id)
-        .select()
-        .single();
+      result = await supabase.from("apu_items").update(payload).eq("id", draft.id).select().single();
     } else {
-      result = await supabase
-        .from("apu_items")
-        .insert(payload)
-        .select()
-        .single();
+      result = await supabase.from("apu_items").insert(payload).select().single();
     }
 
     setSaving(false);
@@ -840,378 +797,731 @@ function APUEditor({
   }
 
   const headerInput: React.CSSProperties = {
-    background: "rgba(255,255,255,0.04)",
-    border: `1px solid ${CS.border}`,
-    borderRadius: 8,
-    color: CS.text,
-    fontFamily: "var(--font-dm-sans)",
-    fontSize: "0.8125rem",
-    padding: "0.35rem 0.6rem",
-    outline: "none",
+    background: "rgba(255,255,255,0.04)", border: `1px solid ${CS.border}`,
+    borderRadius: 8, color: CS.text, fontFamily: "var(--font-dm-sans)",
+    fontSize: "0.8125rem", padding: "0.35rem 0.6rem", outline: "none",
   };
-
   const isValid = draft.code.trim() && draft.description.trim() && draft.unit.trim();
 
   return (
-    <div
-      className="flex flex-col rounded-[10px] overflow-hidden"
-      style={{ border: `1px solid ${CS.border}`, background: CS.surface }}
-    >
-      {/* ── Editor top bar ─────────────────────────────────── */}
-      <div
-        className="flex items-center gap-2 px-4 py-3 flex-wrap shrink-0"
-        style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-      >
-        {/* Back */}
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex items-center gap-1.5 text-sm font-dm-sans mr-2"
-          style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Top bar */}
+      <div className="flex items-center gap-2 px-4 py-3 flex-wrap shrink-0"
+        style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}>
+        <button type="button" onClick={onCancel} aria-label={language === "es" ? "Cerrar editor" : "Close editor"}
+          className="flex items-center justify-center rounded-lg shrink-0"
+          style={{ width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`, cursor: "pointer", color: CS.muted }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {language === "es" ? "Lista" : "List"}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
+          <X className="h-4 w-4" />
         </button>
-
-        <div className="w-px self-stretch" style={{ background: CS.border }} />
-
-        {/* Code */}
-        <input
-          style={{ ...headerInput, width: 72, fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}
-          value={draft.code}
-          onChange={(e) => patch({ code: e.target.value })}
-          placeholder="03.01"
-        />
-
-        {/* Description */}
-        <input
-          style={{ ...headerInput, flex: 1, minWidth: 160 }}
-          value={draft.description}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="font-syne font-bold text-sm" style={{ color: CS.text }}>
+            {draft.id ? (language === "es" ? "Editar APU" : "Edit APU") : (language === "es" ? "Nuevo APU" : "New APU")}
+          </span>
+          {aiFilled && (
+            <span className="flex items-center gap-1 text-[10px] font-dm-sans font-semibold rounded-full px-2 py-px"
+              style={{ background: "rgba(249,115,22,0.14)", color: CS.accent, border: "1px solid rgba(249,115,22,0.3)" }}>
+              <span style={{ fontSize: 9 }}>✦</span>
+              {language === "es" ? "generado por IA" : "AI-generated"}
+            </span>
+          )}
+        </div>
+        <div className="w-px self-stretch shrink-0" style={{ background: CS.border }} />
+        <input style={{ ...headerInput, width: 76, fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}
+          value={draft.code} onChange={(e) => patch({ code: e.target.value })} placeholder="03.01" autoFocus={!draft.id} />
+        <input style={{ ...headerInput, flex: 1, minWidth: 160 }} value={draft.description}
           onChange={(e) => patch({ description: e.target.value })}
-          placeholder={language === "es" ? "Descripción del concepto *" : "Description *"}
-        />
-
-        {/* Unit */}
-        <input
-          style={{ ...headerInput, width: 68 }}
-          value={draft.unit}
-          onChange={(e) => patch({ unit: e.target.value })}
-          placeholder="m³"
-        />
-
+          placeholder={language === "es" ? "Descripción del concepto *" : "Description *"} />
+        <input style={{ ...headerInput, width: 68 }} value={draft.unit}
+          onChange={(e) => patch({ unit: e.target.value })} placeholder="m³" />
+        {/* Category dropdown */}
+        <div ref={catRef} style={{ position: "relative" }}>
+          <button type="button" onClick={() => { setCatOpen(!catOpen); setCatSearch(""); }}
+            style={{ ...headerInput, width: 180, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: draft.category ? CS.text : CS.muted, fontSize: "0.8125rem" }}>
+              {draft.category ? getCategoryLabel(draft.category, language) : t("noCategory", language)}
+            </span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {catOpen && (
+            <div style={{
+              position: "absolute", top: "100%", left: 0, marginTop: 4, width: 240,
+              background: CS.surface, border: `1px solid ${CS.border}`, borderRadius: 10,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.4)", zIndex: 60, maxHeight: 280, display: "flex", flexDirection: "column",
+            }}>
+              <div style={{ padding: "6px 8px", borderBottom: `1px solid ${CS.border}` }}>
+                <input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)}
+                  placeholder={language === "es" ? "Buscar categoría..." : "Search category..."}
+                  style={{ ...headerInput, width: "100%", border: "none", padding: "4px 6px" }}
+                  onKeyDown={(e) => { if (e.key === "Escape") setCatOpen(false); }}
+                />
+              </div>
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {/* No category option */}
+                <button type="button" onClick={() => { patch({ category: null }); setCatOpen(false); }}
+                  style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", cursor: "pointer", color: CS.muted, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", fontStyle: "italic" }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}>
+                  {t("noCategory", language)}
+                </button>
+                {APU_CATEGORIES
+                  .filter((c) => !catSearch || c.toLowerCase().includes(catSearch.toLowerCase()) || (CATEGORY_EN_MAP[c] || "").toLowerCase().includes(catSearch.toLowerCase()))
+                  .map((cat) => (
+                  <button key={cat} type="button"
+                    onClick={() => { patch({ category: cat }); setCatOpen(false); }}
+                    style={{
+                      width: "100%", textAlign: "left", padding: "6px 10px", background: draft.category === cat ? "rgba(249,115,22,0.1)" : "none",
+                      border: "none", cursor: "pointer", color: draft.category === cat ? CS.accent : CS.text,
+                      fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", fontWeight: draft.category === cat ? 600 : 400,
+                    }}
+                    onMouseEnter={(e) => { if (draft.category !== cat) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)"; }}
+                    onMouseLeave={(e) => { if (draft.category !== cat) (e.currentTarget as HTMLButtonElement).style.background = "none"; }}>
+                    {getCategoryLabel(cat, language)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <div className="flex-1" />
-
-        {/* AI Suggest */}
-        <button
-          type="button"
-          onClick={() => setShowAI(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold font-dm-sans transition-colors"
-          style={{
-            background: "rgba(249,115,22,0.1)",
-            border: `1px solid rgba(249,115,22,0.3)`,
-            color: CS.accent,
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.18)")}
-          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.1)")}
-        >
+        <button type="button" onClick={() => setShowAI(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold font-dm-sans"
+          style={{ background: aiFilled ? "rgba(249,115,22,0.06)" : "rgba(249,115,22,0.12)", border: `1px solid rgba(249,115,22,${aiFilled ? "0.2" : "0.35"})`, color: CS.accent, cursor: "pointer" }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.22)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = aiFilled ? "rgba(249,115,22,0.06)" : "rgba(249,115,22,0.12)")}>
           <span style={{ fontSize: 13 }}>✦</span>
-          {language === "es" ? "Sugerir con IA" : "AI Suggest"}
+          {aiFilled ? (language === "es" ? "Regenerar" : "Regenerate") : (language === "es" ? "Sugerir con IA" : "AI Suggest")}
         </button>
-
-        {/* Save */}
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving || !isValid}
+        <button type="button" onClick={handleSave} disabled={saving || !isValid}
           className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold font-dm-sans"
-          style={{
-            background: CS.accent,
-            color: "#fff",
-            border: "none",
-            cursor: saving || !isValid ? "not-allowed" : "pointer",
-            opacity: saving || !isValid ? 0.6 : 1,
-          }}
-        >
+          style={{ background: CS.accent, color: "#fff", border: "none", cursor: saving || !isValid ? "not-allowed" : "pointer", opacity: saving || !isValid ? 0.6 : 1 }}>
           {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {t("save", language)}
         </button>
       </div>
 
-      {/* ── Section tables ─────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto" style={{ background: CS.bg }}>
-        <SectionTable
-          section="materials"
-          rows={draft.materials}
-          language={language}
-          fmt={fmt}
-          onChange={(rows) => patch({ materials: rows })}
-          onOpenLibrary={() => openLibraryFor("materials")}
-        />
-        <SectionTable
-          section="labor"
-          rows={draft.labor}
-          language={language}
-          fmt={fmt}
-          onChange={(rows) => patch({ labor: rows })}
-          onOpenLibrary={() => openLibraryFor("labor")}
-        />
-        <SectionTable
-          section="equipment"
-          rows={draft.equipment}
-          language={language}
-          fmt={fmt}
-          onChange={(rows) => patch({ equipment: rows })}
-          onOpenLibrary={() => openLibraryFor("equipment")}
-        />
+      {/* Two-column layout: sections left, summary right */}
+      <div className="flex-1 overflow-hidden flex" style={{ background: CS.bg }}>
+        {/* Left column: section tables (~60%) */}
+        <div className="flex-1 overflow-y-auto" style={{ minWidth: 0, flex: "0 0 60%" }}>
+          <SectionTable section="materials" rows={draft.materials} language={language} fmt={fmt}
+            onChange={(rows) => patch({ materials: rows })} onOpenLibrary={() => openLibraryFor("materials")} />
+          <SectionTable section="labor" rows={draft.labor} language={language} fmt={fmt}
+            onChange={(rows) => patch({ labor: rows })} onOpenLibrary={() => openLibraryFor("labor")} />
+          <SectionTable section="equipment" rows={draft.equipment} language={language} fmt={fmt}
+            onChange={(rows) => patch({ equipment: rows })} onOpenLibrary={() => openLibraryFor("equipment")} />
+        </div>
+        {/* Right column: cost summary (~40%), sticky */}
+        <div className="overflow-y-auto" style={{ flex: "0 0 40%", borderLeft: `1px solid ${CS.border}` }}>
+          <div style={{ position: "sticky", top: 0 }}>
+            <DetailedCostSummary draft={draft} settings={projectSettings} fmt={fmt} language={language} />
+          </div>
+        </div>
       </div>
 
-      {/* ── Cost summary ───────────────────────────────────── */}
-      <CostSummary
-        draft={draft}
-        fmt={fmt}
-        language={language}
-        onChange={(p) => patch(p)}
-      />
-
-      {/* ── Modals ─────────────────────────────────────────── */}
-      {showLibrary && (
-        <LibraryModal
-          language={language}
-          onInsert={handleLibInsert}
-          onClose={() => setShowLib(false)}
-        />
-      )}
-      {showAI && (
-        <AIModal
-          onFill={handleAIFill}
-          onClose={() => setShowAI(false)}
-        />
-      )}
+      {showLibrary && <LibraryModal language={language} onInsert={handleLibInsert} onClose={() => setShowLib(false)} />}
+      {showAI && <AIModal onFill={handleAIFill} onClose={() => setShowAI(false)} />}
     </div>
   );
 }
 
 // ─── APU list row ─────────────────────────────────────────────────────────────
 
-interface APUListRowProps {
-  item: ApuItem;
-  language: Locale;
-  fmt: (n: number) => string;
-  onEdit: () => void;
-  onDelete: () => void;
+// ─── APU PDF print helper ─────────────────────────────────────────────────────
+
+function printAPU(item: ApuItem, settings: ProjectIndirectCosts, fmt: (n: number) => string, lang: Locale) {
+  const win = window.open("", "_blank", "width=860,height=900,menubar=yes");
+  if (!win) return;
+
+  const draft: EditorDraft = {
+    id: item.id, code: item.code, description: item.description, unit: item.unit,
+    category: item.category ?? null,
+    materials: (item.materials as ApuLineItem[]) ?? [],
+    labor:     (item.labor     as ApuLineItem[]) ?? [],
+    equipment: (item.equipment as ApuLineItem[]) ?? [],
+  };
+  const c = calcCostsDetailed(draft, settings);
+
+  function sectionHtml(title: string, rows: ApuLineItem[], color: string) {
+    if (rows.length === 0) return "";
+    const subtotal = rows.reduce((s, r) => s + r.qty * r.unit_price, 0);
+    const dataRows = rows.map((r, i) => `<tr style="background:${i % 2 ? "#f9fafb" : "transparent"}">
+      <td>${r.name}</td><td style="text-align:center">${r.unit}</td>
+      <td style="text-align:right">${r.qty}</td>
+      <td style="text-align:right">${fmt(r.unit_price)}</td>
+      <td style="text-align:right;font-weight:600">${fmt(r.qty * r.unit_price)}</td>
+    </tr>`).join("");
+    return `<div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;padding:5px 8px;border-top:2px solid ${color};border-bottom:1px solid #e5e7eb;background:#f9fafb">
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:${color}">${title}</span>
+        <span style="font-size:10px;font-weight:700;color:#111">${fmt(subtotal)}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+        <thead><tr style="border-bottom:1px solid #e5e7eb">
+          <th style="text-align:left;padding:4px 8px;font-size:9.5px;color:#6b7280;font-weight:600;text-transform:uppercase">${lang === "es" ? "Concepto" : "Description"}</th>
+          <th style="text-align:center;padding:4px 8px;font-size:9.5px;color:#6b7280;font-weight:600;width:40px">${lang === "es" ? "Und." : "Unit"}</th>
+          <th style="text-align:right;padding:4px 8px;font-size:9.5px;color:#6b7280;font-weight:600;width:50px">${lang === "es" ? "Cant." : "Qty"}</th>
+          <th style="text-align:right;padding:4px 8px;font-size:9.5px;color:#6b7280;font-weight:600;width:80px">${lang === "es" ? "P.U." : "Unit Price"}</th>
+          <th style="text-align:right;padding:4px 8px;font-size:9.5px;color:#6b7280;font-weight:600;width:90px">${lang === "es" ? "Parcial" : "Partial"}</th>
+        </tr></thead>
+        <tbody>${dataRows}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function calcRow(label: string, value: number, pct?: number, indent?: boolean) {
+    return `<div style="display:flex;justify-content:space-between;padding:4px ${indent ? "12px" : "0"};border-bottom:1px solid #f3f4f6">
+      <span style="font-size:10.5px;color:${indent ? "#6b7280" : "#111"}">${label}${pct !== undefined && pct > 0 ? ` (${pct}%)` : ""}</span>
+      <span style="font-size:10.5px;font-weight:600;color:${indent ? "#111" : "#111"}">${fmt(value)}</span>
+    </div>`;
+  }
+
+  const matHtml  = sectionHtml(lang === "es" ? "Materiales"  : "Materials",  draft.materials,  "#3b82f6");
+  const labHtml  = sectionHtml(lang === "es" ? "Mano de Obra": "Labor",      draft.labor,      "#22c55e");
+  const equiHtml = sectionHtml(lang === "es" ? "Equipos"     : "Equipment",  draft.equipment,  "#f97316");
+
+  let priceCalc = calcRow(lang === "es" ? "Costo Directo (CD)" : "Direct Cost (CD)", c.directCost);
+  if (settings.ggen.pct  > 0) priceCalc += calcRow(settings.ggen.label  || "Gastos generales", c.ggenVal,  settings.ggen.pct,  true);
+  if (settings.pgas1.pct > 0) priceCalc += calcRow(settings.pgas1.label || "pgas1",             c.pgas1Val, settings.pgas1.pct, true);
+  if (settings.pgas2.pct > 0) priceCalc += calcRow(settings.pgas2.label || "pgas2",             c.pgas2Val, settings.pgas2.pct, true);
+  priceCalc += calcRow(lang === "es" ? "Costo Neto (CN)" : "Net Cost (CN)", c.netCost);
+  if (settings.util.pct > 0)  priceCalc += calcRow(settings.util.label || "Utilidad", c.utilVal, settings.util.pct, true);
+  priceCalc += calcRow(lang === "es" ? "Precio de Venta (PV)" : "Selling Price (PV)", c.sellingPrice);
+  if (settings.tot1.pct > 0)  priceCalc += calcRow(settings.tot1.label || "Impuesto 1", c.tot1Val, settings.tot1.pct, true);
+  if (settings.tot2.pct > 0)  priceCalc += calcRow(settings.tot2.label || "Impuesto 2", c.tot2Val, settings.tot2.pct, true);
+
+  const html = `<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"/>
+  <title>APU — ${item.code}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;font-size:11px;color:#111827;padding:20px 24px}
+    h1{font-size:15px;font-weight:700;margin-bottom:2px}
+    h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#f97316;margin:16px 0 8px}
+    .meta{font-size:10px;color:#6b7280;margin-bottom:14px;display:flex;gap:20px}
+    .grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
+    .price-box{padding:10px;border:1.5px solid #fed7aa;background:#fff7ed;border-radius:8px}
+    .price-final{display:flex;justify-content:space-between;align-items:center;padding:8px;background:#f97316;border-radius:6px;margin-top:10px}
+    .price-final span:first-child{font-size:10px;font-weight:700;color:#fff;text-transform:uppercase}
+    .price-final span:last-child{font-size:17px;font-weight:700;color:#fff}
+    .footer{margin-top:16px;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:8px}
+    @media print{body{padding:10px 14px}}
+  </style></head><body>
+  <h1>APU — ${item.description}</h1>
+  <div class="meta">
+    <span><strong>${lang === "es" ? "Código" : "Code"}:</strong> ${item.code}</span>
+    <span><strong>${lang === "es" ? "Unidad" : "Unit"}:</strong> ${item.unit}</span>
+    <span><strong>${lang === "es" ? "Generado" : "Generated"}:</strong> ${new Date().toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { year: "numeric", month: "short", day: "numeric" })}</span>
+  </div>
+
+  <div class="grid">
+    <div>
+      <h2>${lang === "es" ? "Composición de costos" : "Cost breakdown"}</h2>
+      ${matHtml}${labHtml}${equiHtml}
+    </div>
+    <div>
+      <h2>${lang === "es" ? "Cálculo del precio" : "Price calculation"}</h2>
+      <div class="price-box">
+        ${priceCalc}
+        <div class="price-final">
+          <span>${lang === "es" ? "Precio Final" : "Final Price"}</span>
+          <span>${fmt(c.finalPrice)}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span>ConstruSheet — ${lang === "es" ? "Análisis de Precios Unitarios" : "Unit Price Analysis"}</span>
+    <span>${new Date().toISOString().slice(0, 10)}</span>
+  </div>
+  <script>setTimeout(()=>{window.print();},400)<\/script>
+  </body></html>`;
+
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
-function APUListRow({ item, language: _language, fmt, onEdit, onDelete }: APUListRowProps) {
-  const [deleting, setDeleting] = useState(false);
-  const supabase = createClient();
+// ─── APU list row ─────────────────────────────────────────────────────────────
 
-  async function handleDelete(e: React.MouseEvent) {
+function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit, onDelete, onDuplicate, onSendToBudget, onPrint }:
+  { item: ApuItem; language: Locale; fmt: (n: number) => string;
+    selected: boolean; onSelect: () => void; onEdit: () => void; onDelete: () => void;
+    onDuplicate: () => void; onSendToBudget: () => void; onPrint: () => void; }
+) {
+  const [deleting, setDeleting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  function handleTrashClick(e: React.MouseEvent) {
     e.stopPropagation();
-    setDeleting(true);
-    await supabase.from("apu_items").delete().eq("id", item.id);
-    onDelete();
+    setShowConfirm(true);
   }
 
   return (
     <tr
       className="group cursor-pointer"
-      style={{ borderBottom: `1px solid ${CS.border}` }}
-      onClick={onEdit}
+      style={{
+        borderBottom: `1px solid ${CS.border}`,
+        background: selected ? "rgba(249,115,22,0.08)" : undefined,
+        outline: selected ? `1px solid rgba(249,115,22,0.3)` : undefined,
+      }}
+      onClick={() => { onSelect(); }}
+      onDoubleClick={() => onEdit()}
     >
+      <td className="px-3 py-3" style={{ width: 28 }}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onSelect}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: "pointer", accentColor: CS.accent }}
+        />
+      </td>
       <td className="px-4 py-3">
-        <code className="text-xs font-mono" style={{ color: CS.accent }}>
-          {item.code}
-        </code>
+        <code className="text-xs font-mono" style={{ color: CS.accent }}>{item.code}</code>
       </td>
       <td className="px-3 py-3 max-w-xs">
-        <span className="text-sm font-dm-sans truncate block" style={{ color: CS.text }}>
-          {item.description}
-        </span>
+        <span className="text-sm font-dm-sans truncate block" style={{ color: CS.text }}>{item.description}</span>
       </td>
       <td className="px-3 py-3">
-        <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
-          {item.unit}
-        </span>
+        <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>{item.unit}</span>
+      </td>
+      <td className="px-3 py-3">
+        {item.category && (() => {
+          const col = categoryColor(item.category);
+          return (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium font-dm-sans whitespace-nowrap"
+              style={{ background: `${col}18`, color: col, border: `1px solid ${col}30` }}>
+              {getCategoryLabel(item.category, _language)}
+            </span>
+          );
+        })()}
       </td>
       <td className="px-3 py-3 text-right">
-        <span className="text-sm font-dm-sans" style={{ color: CS.text }}>
-          {fmt(item.direct_cost)}
-        </span>
-      </td>
-      <td className="px-3 py-3 text-right">
-        <div className="flex flex-col items-end gap-0.5">
-          <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
-            GG {item.overhead_pct}% · U {item.profit_pct}%
-          </span>
-        </div>
+        <span className="text-sm font-dm-sans" style={{ color: CS.text }}>{fmt(item.direct_cost)}</span>
       </td>
       <td className="px-4 py-3 text-right">
-        <span className="text-sm font-semibold font-dm-sans" style={{ color: CS.accent }}>
-          {fmt(item.selling_price)}
-        </span>
+        <span className="text-sm font-semibold font-dm-sans" style={{ color: CS.accent }}>{fmt(item.selling_price)}</span>
       </td>
       <td className="px-3 py-3">
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            title={_language === "es" ? "Editar" : "Edit"}
             className="flex items-center justify-center rounded-lg"
-            style={{
-              width: 28, height: 28,
-              background: "none",
-              border: `1px solid ${CS.border}`,
-              cursor: "pointer", color: CS.muted,
-            }}
+            style={{ width: 28, height: 28, background: "none", border: `1px solid ${CS.border}`, cursor: "pointer", color: CS.muted }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
             <Pencil className="h-3 w-3" />
           </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
+          <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+            title={_language === "es" ? "Duplicar" : "Duplicate"}
             className="flex items-center justify-center rounded-lg"
-            style={{
-              width: 28, height: 28,
-              background: "none",
-              border: `1px solid transparent`,
-              cursor: "pointer", color: CS.muted,
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = "#ef4444";
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(239,68,68,0.3)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.color = CS.muted;
-              (e.currentTarget as HTMLButtonElement).style.borderColor = "transparent";
-            }}
-          >
+            style={{ width: 28, height: 28, background: "none", border: `1px solid ${CS.border}`, cursor: "pointer", color: CS.muted }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
+            <Copy className="h-3 w-3" />
+          </button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onPrint(); }}
+            title={_language === "es" ? "Imprimir / exportar PDF" : "Print / export PDF"}
+            className="flex items-center justify-center rounded-lg"
+            style={{ width: 28, height: 28, background: "none", border: `1px solid ${CS.border}`, cursor: "pointer", color: CS.muted }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
+            <FileText className="h-3 w-3" />
+          </button>
+          <button type="button" onClick={(e) => { e.stopPropagation(); onSendToBudget(); }}
+            title={_language === "es" ? "Agregar al presupuesto" : "Add to budget"}
+            className="flex items-center gap-1 px-2 rounded-lg text-xs font-medium font-dm-sans"
+            style={{ height: 28, background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.2)", cursor: "pointer", color: CS.accent, whiteSpace: "nowrap" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.18)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.1)"; }}>
+            <ArrowRight className="h-3 w-3" />
+            {_language === "es" ? "Presupuesto" : "Budget"}
+          </button>
+          <button type="button" onClick={handleTrashClick} disabled={deleting}
+            className="flex items-center justify-center rounded-lg"
+            style={{ width: 28, height: 28, background: "none", border: "1px solid transparent", cursor: "pointer", color: CS.muted }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ef4444"; (e.currentTarget as HTMLButtonElement).style.borderColor = "rgba(239,68,68,0.3)"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = CS.muted; (e.currentTarget as HTMLButtonElement).style.borderColor = "transparent"; }}>
             {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
           </button>
         </div>
       </td>
+      {showConfirm && (
+        <td colSpan={0} style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, overflow: "visible", border: "none", padding: 0 }}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}>
+            <div className="rounded-xl p-6 shadow-2xl" style={{ background: CS.surface, border: `1px solid ${CS.border}`, maxWidth: 400, width: "100%" }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <Trash2 className="h-5 w-5" style={{ color: "#ef4444" }} />
+                <h3 className="font-semibold font-dm-sans" style={{ color: CS.text }}>
+                  {_language === "es" ? "Eliminar este APU" : "Delete this APU"}
+                </h3>
+              </div>
+              <p className="text-sm mb-6 font-dm-sans" style={{ color: CS.muted }}>
+                {_language === "es"
+                  ? `¿Eliminar "${item.description}"? Esta acción no se puede deshacer.`
+                  : `Delete "${item.description}"? This cannot be undone.`}
+              </p>
+              <div className="flex justify-end gap-3">
+                <button onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}
+                  className="px-4 py-2 rounded-lg text-sm font-dm-sans"
+                  style={{ border: `1px solid ${CS.border}`, background: CS.surface, color: CS.text, cursor: "pointer" }}>
+                  {_language === "es" ? "Cancelar" : "Cancel"}
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); setShowConfirm(false); setDeleting(true); onDelete(); }}
+                  disabled={deleting}
+                  className="px-4 py-2 rounded-lg text-sm font-dm-sans"
+                  style={{ background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }}>
+                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : (_language === "es" ? "Eliminar" : "Delete")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </td>
+      )}
     </tr>
   );
 }
 
 // ─── APU list view ────────────────────────────────────────────────────────────
 
-interface APUListProps {
-  items: ApuItem[];
-  language: Locale;
-  fmt: (n: number) => string;
-  onNew: () => void;
-  onEdit: (item: ApuItem) => void;
-  onDelete: (id: string) => void;
-  onAI: () => void;
-  onLibrary: () => void;
-}
+function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, onEdit, onDelete, onDuplicate, onSendToBudget, onPrint, onSearch, onAI, onLibrary }:
+  { items: ApuItem[]; language: Locale; fmt: (n: number) => string;
+    selectedId: string | null; search: string;
+    onSelect: (id: string) => void; onNew: () => void;
+    onEdit: (item: ApuItem) => void; onDelete: (id: string) => void;
+    onDuplicate: (item: ApuItem) => void;
+    onSendToBudget: (item: ApuItem) => void;
+    onPrint: (item: ApuItem) => void;
+    onSearch: (q: string) => void;
+    onAI: () => void; onLibrary: () => void }
+) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sortBy, setSortBy] = useState<"code" | "description" | "unit" | "direct_cost" | "selling_price" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const lang = language;
 
-function APUList({ items, language, fmt, onNew, onEdit, onDelete, onAI, onLibrary }: APUListProps) {
-  const totalSelling = items.reduce((s, i) => s + i.selling_price, 0);
+  function toggleSort(col: "code" | "description" | "unit" | "direct_cost" | "selling_price") {
+    if (sortBy === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortBy(col); setSortDir("asc"); }
+  }
+
+  // Unique categories present in current items
+  const usedCategories = Array.from(new Set(items.map((i) => i.category).filter(Boolean) as string[])).sort();
+
+  // Apply category filter
+  const categoryFiltered = categoryFilter
+    ? items.filter((i) => i.category === categoryFilter)
+    : items;
+
+  const sortedItems = sortBy
+    ? [...categoryFiltered].sort((a, b) => {
+        const va = a[sortBy], vb = b[sortBy];
+        const cmp = typeof va === "number" && typeof vb === "number"
+          ? va - vb
+          : String(va).localeCompare(String(vb));
+        return sortDir === "asc" ? cmp : -cmp;
+      })
+    : items;
+
+  const totalSelling = categoryFiltered.reduce((s, i) => s + i.selling_price, 0);
+  const selectedItem = categoryFiltered.find((i) => i.id === selectedId) ?? null;
+
+  async function handleDeleteSelected() {
+    if (!selectedId) return;
+    setConfirmDelete(false);
+    onDelete(selectedId);
+  }
+
+  function handlePrintAPU() {
+    const win = window.open("", "_blank", "width=960,height=720,menubar=yes");
+    if (!win) return;
+
+    const fmtN = (n: number) => fmt(n);
+
+    function lineRows(arr: ApuLineItem[], color: string): string {
+      if (!arr.length) return `<tr><td colspan="5" style="color:#9ca3af;font-style:italic;padding:3px 8px;font-size:10px">${lang === "es" ? "Sin insumos" : "No inputs"}</td></tr>`;
+      return arr.map((r) => {
+        const sub = r.qty * r.unit_price;
+        const pct = sub > 0 ? "" : "";
+        return `<tr>
+          <td style="padding:3px 8px;padding-left:20px">${r.name}</td>
+          <td style="text-align:center;padding:3px 8px;color:#6b7280">${r.unit}</td>
+          <td style="text-align:right;padding:3px 8px">${r.qty.toLocaleString(undefined,{maximumFractionDigits:4})}</td>
+          <td style="text-align:right;padding:3px 8px">${fmtN(r.unit_price)}</td>
+          <td style="text-align:right;padding:3px 8px;font-weight:600;color:${color}">${fmtN(sub)}</td>
+        </tr>${pct}`;
+      }).join("");
+    }
+
+    function sectionHeader(label: string, color: string, subtotal: number): string {
+      return `<tr style="background:${color}18">
+        <td colspan="4" style="padding:4px 8px;font-weight:700;font-size:10px;text-transform:uppercase;color:${color};letter-spacing:.05em">${label}</td>
+        <td style="text-align:right;padding:4px 8px;font-weight:700;color:${color}">${fmtN(subtotal)}</td>
+      </tr>`;
+    }
+
+    const apuCards = items.map((item, idx) => {
+      const mat = (item.materials as ApuLineItem[]) ?? [];
+      const lab = (item.labor     as ApuLineItem[]) ?? [];
+      const eqp = (item.equipment as ApuLineItem[]) ?? [];
+      const sumArr = (arr: ApuLineItem[]) => arr.reduce((s, r) => s + r.qty * r.unit_price, 0);
+      const matSub = sumArr(mat);
+      const labSub = sumArr(lab);
+      const eqpSub = sumArr(eqp);
+      const overheadAmt = item.direct_cost * (item.overhead_pct / 100);
+      const profitAmt   = item.direct_cost * (item.profit_pct   / 100);
+
+      return `
+      <div class="card" ${idx > 0 ? 'style="margin-top:24px"' : ""}>
+        <div class="card-header">
+          <div>
+            <span class="code">${item.code}</span>
+            <span class="desc">${item.description}</span>
+          </div>
+          <span class="unit-badge">${item.unit}</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>${lang === "es" ? "Insumo / Recurso" : "Input / Resource"}</th>
+              <th style="width:55px;text-align:center">${lang === "es" ? "Unid." : "Unit"}</th>
+              <th style="width:65px;text-align:right">${lang === "es" ? "Cant." : "Qty"}</th>
+              <th style="width:80px;text-align:right">${lang === "es" ? "P.U." : "Unit P."}</th>
+              <th style="width:90px;text-align:right">${lang === "es" ? "Subtotal" : "Subtotal"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sectionHeader(lang === "es" ? "Materiales" : "Materials", "#3b82f6", matSub)}
+            ${lineRows(mat, "#3b82f6")}
+            ${sectionHeader(lang === "es" ? "Mano de obra" : "Labor", "#22c55e", labSub)}
+            ${lineRows(lab, "#22c55e")}
+            ${sectionHeader(lang === "es" ? "Equipos y herramientas" : "Equipment & Tools", "#f97316", eqpSub)}
+            ${lineRows(eqp, "#f97316")}
+          </tbody>
+          <tfoot>
+            <tr class="subtotal-row">
+              <td colspan="4" style="text-align:right;font-size:10px;text-transform:uppercase;color:#92400e">${lang === "es" ? "Costo Directo" : "Direct Cost"}</td>
+              <td style="text-align:right;font-weight:700">${fmtN(item.direct_cost)}</td>
+            </tr>
+            <tr class="overhead-row">
+              <td colspan="4" style="text-align:right;font-size:10px;color:#6b7280">${lang === "es" ? "Gastos Ind." : "Overhead"} (${item.overhead_pct}%)</td>
+              <td style="text-align:right;color:#6b7280">${fmtN(overheadAmt)}</td>
+            </tr>
+            <tr class="overhead-row">
+              <td colspan="4" style="text-align:right;font-size:10px;color:#6b7280">${lang === "es" ? "Utilidad" : "Profit"} (${item.profit_pct}%)</td>
+              <td style="text-align:right;color:#6b7280">${fmtN(profitAmt)}</td>
+            </tr>
+            <tr class="price-row">
+              <td colspan="4" style="text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;color:#f97316">${lang === "es" ? "Precio Unitario" : "Unit Price"}</td>
+              <td style="text-align:right;font-size:14px;font-weight:700;color:#f97316">${fmtN(item.selling_price)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8"/>
+  <title>${lang === "es" ? "Análisis de Precio Unitario" : "Unit Price Analysis"} — ConstruSheet</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;font-size:11px;color:#111827;padding:24px}
+    h1{font-size:18px;font-weight:700;margin-bottom:2px}
+    .meta{font-size:10px;color:#6b7280;margin-bottom:16px}
+    .card{border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;page-break-inside:avoid}
+    .card-header{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff7ed;border-bottom:1px solid #fed7aa}
+    .code{font-family:monospace;font-size:11px;color:#f97316;font-weight:700;margin-right:10px}
+    .desc{font-size:12px;font-weight:600;color:#111827}
+    .unit-badge{font-size:10px;font-weight:600;background:#f97316;color:#fff;padding:2px 8px;border-radius:20px;white-space:nowrap}
+    table{width:100%;border-collapse:collapse;font-size:10.5px}
+    thead th{background:#f97316;color:#fff;padding:4px 8px;text-align:left;font-size:9.5px;font-weight:600;text-transform:uppercase}
+    tbody td{border-bottom:1px solid #f3f4f6;vertical-align:middle}
+    tbody tr:nth-child(even) td{background:#f9fafb}
+    tfoot td{padding:4px 8px;border-top:1px solid #f3f4f6}
+    .subtotal-row td{background:#fff7ed!important;border-top:2px solid #fed7aa!important}
+    .overhead-row td{background:#fafafa}
+    .price-row td{background:#fff7ed!important;border-top:2px solid #fed7aa!important}
+    .summary-table{width:100%;border-collapse:collapse;margin-top:20px;font-size:10.5px}
+    .summary-table th{background:#1f2937;color:#fff;padding:5px 8px;text-align:left;font-size:9.5px;font-weight:600}
+    .summary-table td{padding:4px 8px;border-bottom:1px solid #f3f4f6}
+    .summary-table tr:nth-child(even) td{background:#f9fafb}
+    .summary-total td{background:#fff7ed!important;font-weight:700;border-top:2px solid #fed7aa!important}
+    h2{font-size:11px;font-weight:700;color:#f97316;text-transform:uppercase;letter-spacing:.06em;margin:20px 0 6px}
+    .footer{margin-top:16px;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between}
+    @media print{body{padding:12px}.card{page-break-inside:avoid}}
+  </style>
+</head>
+<body>
+  <h1>ConstruSheet — ${lang === "es" ? "Análisis de Precio Unitario (APU)" : "Unit Price Analysis (APU)"}</h1>
+  <div class="meta">${lang === "es" ? "Generado" : "Generated"}: ${new Date().toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { year: "numeric", month: "long", day: "numeric" })} &nbsp;·&nbsp; ${items.length} ${lang === "es" ? "análisis" : "analyses"}</div>
+
+  ${apuCards}
+
+  <h2>${lang === "es" ? "Resumen de precios" : "Price summary"}</h2>
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th style="width:70px">${lang === "es" ? "Código" : "Code"}</th>
+        <th>${lang === "es" ? "Descripción" : "Description"}</th>
+        <th style="width:50px;text-align:center">${lang === "es" ? "Unid." : "Unit"}</th>
+        <th style="width:85px;text-align:right">${lang === "es" ? "Costo Dir." : "Direct Cost"}</th>
+        <th style="width:85px;text-align:right">${lang === "es" ? "Precio Unit." : "Unit Price"}</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${items.map((item) => `<tr>
+        <td><code style="font-family:monospace;color:#f97316;font-size:10px">${item.code}</code></td>
+        <td>${item.description}</td>
+        <td style="text-align:center;color:#6b7280">${item.unit}</td>
+        <td style="text-align:right">${fmtN(item.direct_cost)}</td>
+        <td style="text-align:right;font-weight:600;color:#f97316">${fmtN(item.selling_price)}</td>
+      </tr>`).join("")}
+    </tbody>
+    <tfoot>
+      <tr class="summary-total">
+        <td colspan="4" style="text-align:right;font-size:10px;color:#92400e;text-transform:uppercase">${lang === "es" ? "Total precio de venta" : "Total selling price"}</td>
+        <td style="text-align:right;font-size:13px;color:#f97316">${fmtN(totalSelling)}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="footer"><span>ConstruSheet</span><span>${new Date().toISOString().slice(0, 10)}</span></div>
+  <script>setTimeout(()=>{window.print();},400)<\/script>
+</body>
+</html>`;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
           <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
-            {language === "es" ? "Análisis de Precio Unitario" : "Unit Price Analysis"}
+            {lang === "es" ? "Análisis de Precio Unitario" : "Unit Price Analysis"}
           </h2>
           <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
-            {items.length} {language === "es" ? "análisis registrados" : "analyses on record"}
+            {items.length} {lang === "es" ? "análisis registrados" : "analyses on record"}
+            {totalSelling > 0 && (
+              <>
+                {" · "}
+                <span style={{ color: CS.text, fontWeight: 600 }}>{fmt(totalSelling)}</span>
+                {" "}{lang === "es" ? "precio venta total" : "total selling price"}
+              </>
+            )}
           </p>
+          {usedCategories.length > 0 && (
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: `1px solid ${CS.border}`,
+                  borderRadius: 8, color: categoryFilter ? CS.text : CS.muted,
+                  fontFamily: "var(--font-dm-sans)", fontSize: "0.75rem",
+                  padding: "3px 8px", outline: "none", cursor: "pointer",
+                }}
+              >
+                <option value="">{t("allCategories", lang)}</option>
+                {usedCategories.map((c) => (
+                  <option key={c} value={c}>{getCategoryLabel(c, lang)}</option>
+                ))}
+              </select>
+              {categoryFilter && (
+                <button onClick={() => setCategoryFilter("")}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted, display: "flex", alignItems: "center" }}>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
-          {/* Library shortcut */}
-          <button
-            type="button"
-            onClick={onLibrary}
-            aria-label={language === "es" ? "Abrir biblioteca de precios" : "Open price library"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: "pointer",
-            }}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button type="button" onClick={() => {
+            const headers = [
+              lang === "es" ? "Código" : "Code",
+              lang === "es" ? "Descripción" : "Description",
+              lang === "es" ? "Unidad" : "Unit",
+              lang === "es" ? "Costo Directo" : "Direct Cost",
+              lang === "es" ? "GG %" : "OH %",
+              lang === "es" ? "Utilidad %" : "Profit %",
+              lang === "es" ? "Precio Final" : "Selling Price",
+            ];
+            const csvRows = items.map((item) => [
+              item.code, item.description, item.unit,
+              item.direct_cost.toFixed(2),
+              item.overhead_pct.toFixed(2),
+              item.profit_pct.toFixed(2),
+              item.selling_price.toFixed(2),
+            ]);
+            const csv = [headers, ...csvRows]
+              .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+              .join("\n");
+            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a"); a.href = url;
+            a.download = `apu-${Date.now()}.csv`; a.click();
+            URL.revokeObjectURL(url);
+          }} disabled={items.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: items.length === 0 ? CS.muted : CS.text, cursor: items.length === 0 ? "not-allowed" : "pointer", opacity: items.length === 0 ? 0.4 : 1 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            CSV
+          </button>
+          <button type="button" onClick={handlePrintAPU} disabled={items.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: items.length === 0 ? CS.muted : CS.text, cursor: items.length === 0 ? "not-allowed" : "pointer", opacity: items.length === 0 ? 0.4 : 1 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            PDF
+          </button>
+          <button type="button" onClick={onLibrary}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
-            <BookOpen className="h-4 w-4" aria-hidden="true" />
-            {language === "es" ? "Biblioteca" : "Library"}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
+            <BookOpen className="h-4 w-4" />
+            {lang === "es" ? "Biblioteca" : "Library"}
           </button>
-
-          {/* AI button */}
-          <button
-            type="button"
-            onClick={onAI}
-            aria-label={language === "es" ? "Generar APU con IA" : "Generate APU with AI"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
-            style={{
-              background: "rgba(249,115,22,0.1)",
-              border: `1px solid rgba(249,115,22,0.3)`,
-              color: CS.accent,
-              cursor: "pointer",
-            }}
-          >
+          <button type="button" onClick={onAI}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+            style={{ background: "rgba(249,115,22,0.1)", border: `1px solid rgba(249,115,22,0.3)`, color: CS.accent, cursor: "pointer" }}>
             <span style={{ fontSize: 15 }}>✦</span>
-            {language === "es" ? "Sugerir con IA" : "AI Suggest"}
+            {lang === "es" ? "Sugerir con IA" : "AI Suggest"}
           </button>
-
-          {/* New APU */}
-          <button
-            type="button"
-            onClick={onNew}
-            aria-label={language === "es" ? "Nuevo APU" : "New APU"}
-            className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
-            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {language === "es" ? "Nuevo APU" : "New APU"}
+          <button type="button" onClick={onNew}
+            className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
+            <Plus className="h-4 w-4" />
+            {lang === "es" ? "Nuevo APU" : "New APU"}
           </button>
         </div>
       </div>
 
       {/* Empty state */}
       {items.length === 0 && (
-        <div
-          className="flex flex-col items-center justify-center py-20 rounded-[10px] text-center gap-4"
-          style={{ border: `1.5px dashed ${CS.border}` }}
-        >
+        <div className="flex flex-col items-center justify-center py-20 rounded-[10px] text-center gap-4"
+          style={{ border: `1.5px dashed ${CS.border}` }}>
           <p className="font-syne font-bold text-base" style={{ color: CS.text }}>
-            {language === "es" ? "No hay APUs" : "No APU items"}
+            {lang === "es" ? "No hay APUs" : "No APU items"}
           </p>
           <p className="text-sm font-dm-sans max-w-xs" style={{ color: CS.muted }}>
-            {language === "es"
-              ? "Crea uno manualmente o usa IA para generarlo desde una descripción."
-              : "Create one manually or use AI to generate it from a description."}
+            {lang === "es" ? "Crea uno manualmente o usa IA para generarlo desde una descripción." : "Create one manually or use AI to generate it from a description."}
           </p>
           <div className="flex gap-2">
-            <button
-              onClick={onNew}
-              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-              style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
-            >
-              <Plus className="h-4 w-4" />
-              {language === "es" ? "Nuevo APU" : "New APU"}
+            <button onClick={onNew} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+              style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
+              <Plus className="h-4 w-4" />{lang === "es" ? "Nuevo APU" : "New APU"}
             </button>
-            <button
-              onClick={onAI}
-              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-              style={{
-                background: "rgba(249,115,22,0.1)",
-                border: `1px solid rgba(249,115,22,0.3)`,
-                color: CS.accent,
-                cursor: "pointer",
-              }}
-            >
-              <span>✦</span>
-              {language === "es" ? "Usar IA" : "Use AI"}
+            <button onClick={onAI} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+              style={{ background: "rgba(249,115,22,0.1)", border: `1px solid rgba(249,115,22,0.3)`, color: CS.accent, cursor: "pointer" }}>
+              <span>✦</span>{lang === "es" ? "Usar IA" : "Use AI"}
             </button>
           </div>
         </div>
@@ -1219,71 +1529,227 @@ function APUList({ items, language, fmt, onNew, onEdit, onDelete, onAI, onLibrar
 
       {/* Table */}
       {items.length > 0 && (
-        <div
-          className="rounded-[10px] overflow-hidden"
-          style={{ border: `1px solid ${CS.border}` }}
-        >
-          <div className="overflow-x-auto">
+        <div className="rounded-[10px] overflow-hidden flex-1 flex flex-col" style={{ border: `1px solid ${CS.border}` }}>
+          <div className="flex-1 overflow-x-auto">
             <table className="w-full font-dm-sans">
               <thead>
-                <tr
-                  className="text-xs font-semibold"
-                  style={{
-                    borderBottom: `1px solid ${CS.border}`,
-                    background: "rgba(255,255,255,0.03)",
-                    color: CS.muted,
-                  }}
-                >
-                  <th className="text-left px-4 py-3 w-20">
-                    {language === "es" ? "Código" : "Code"}
+                <tr className="text-xs font-semibold"
+                  style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.03)", color: CS.muted }}>
+                  <th className="px-3 py-3 w-8" />
+                  {(["code", "description", "unit"] as const).map((col) => {
+                    const label = col === "code" ? (lang === "es" ? "Código" : "Code")
+                      : col === "description" ? (lang === "es" ? "Descripción" : "Description")
+                      : (lang === "es" ? "Unidad" : "Unit");
+                    const active = sortBy === col;
+                    return (
+                      <th key={col}
+                        onClick={() => toggleSort(col)}
+                        className="text-left px-3 py-3 select-none"
+                        style={{
+                          cursor: "pointer",
+                          color: active ? CS.accent : CS.muted,
+                          width: col === "code" ? 80 : col === "unit" ? 80 : undefined,
+                        }}>
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          {active ? (sortDir === "asc" ? "↑" : "↓") : <span style={{ opacity: 0.3 }}>↕</span>}
+                        </span>
+                      </th>
+                    );
+                  })}
+                  <th className="text-left px-3 py-3 select-none" style={{ color: CS.muted, width: 140 }}>
+                    {t("category", lang)}
                   </th>
-                  <th className="text-left px-3 py-3">
-                    {language === "es" ? "Descripción" : "Description"}
-                  </th>
-                  <th className="text-left px-3 py-3 w-20">
-                    {language === "es" ? "Unidad" : "Unit"}
-                  </th>
-                  <th className="text-right px-3 py-3 w-32">
-                    {language === "es" ? "Costo Directo" : "Direct Cost"}
-                  </th>
-                  <th className="text-right px-3 py-3 w-32">
-                    {language === "es" ? "GG / Util." : "OH / Profit"}
-                  </th>
-                  <th className="text-right px-4 py-3 w-32">
-                    {language === "es" ? "Precio Venta" : "Selling Price"}
-                  </th>
+                  {(["direct_cost", "selling_price"] as const).map((col) => {
+                    const label = col === "direct_cost" ? (lang === "es" ? "Costo Directo" : "Direct Cost")
+                      : (lang === "es" ? "Precio Final" : "Final Price");
+                    const active = sortBy === col;
+                    return (
+                      <th key={col}
+                        onClick={() => toggleSort(col)}
+                        className="text-right px-3 py-3 select-none"
+                        style={{
+                          cursor: "pointer",
+                          color: active ? CS.accent : CS.muted,
+                          width: col === "direct_cost" ? 128 : 144,
+                        }}>
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          {active ? (sortDir === "asc" ? "↑" : "↓") : <span style={{ opacity: 0.3 }}>↕</span>}
+                        </span>
+                      </th>
+                    );
+                  })}
                   <th className="px-3 py-3 w-20" />
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
-                  <APUListRow
-                    key={item.id}
-                    item={item}
-                    language={language}
-                    fmt={fmt}
+                {sortedItems.map((item) => (
+                  <APUListRow key={item.id} item={item} language={language} fmt={fmt}
+                    selected={selectedId === item.id}
+                    onSelect={() => onSelect(item.id === selectedId ? "" : item.id)}
                     onEdit={() => onEdit(item)}
                     onDelete={() => onDelete(item.id)}
-                  />
+                    onDuplicate={() => onDuplicate(item)}
+                    onSendToBudget={() => onSendToBudget(item)}
+                    onPrint={() => onPrint(item)} />
                 ))}
               </tbody>
             </table>
           </div>
 
           {/* Footer total */}
-          <div
-            className="flex items-center justify-between px-5 py-3"
+          <div className="flex items-center justify-between px-5 py-3 shrink-0"
+            style={{ borderTop: `1px solid ${CS.border}`, background: "rgba(249,115,22,0.04)" }}>
+            <span className="text-sm font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es" ? "Total precio final" : "Total final price"}
+            </span>
+            <span className="font-syne font-bold text-xl" style={{ color: CS.accent }}>{fmt(totalSelling)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bottom toolbar ─────────────────────────────────── */}
+      {items.length > 0 && (
+        <div
+          className="flex items-center gap-2 mt-3 px-3 py-2 rounded-[10px]"
+          style={{ border: `1px solid ${CS.border}`, background: CS.surface }}
+        >
+          {/* + New */}
+          <button
+            type="button"
+            onClick={onNew}
+            title={lang === "es" ? "Nuevo APU" : "New APU"}
+            className="flex items-center justify-center rounded-lg"
+            style={{ width: 30, height: 30, background: CS.accent, border: "none", cursor: "pointer", color: "#fff" }}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+
+          {/* Edit selected */}
+          <button
+            type="button"
+            onClick={() => selectedItem && onEdit(selectedItem)}
+            disabled={!selectedItem}
+            title={lang === "es" ? "Editar seleccionado" : "Edit selected"}
+            className="flex items-center justify-center rounded-lg"
             style={{
-              borderTop: `1px solid ${CS.border}`,
-              background: "rgba(249,115,22,0.04)",
+              width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
+              cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? CS.text : CS.muted,
+              opacity: selectedItem ? 1 : 0.4,
             }}
           >
-            <span className="text-sm font-dm-sans" style={{ color: CS.muted }}>
-              {language === "es" ? "Total precio de venta" : "Total selling price"}
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Duplicate selected */}
+          <button
+            type="button"
+            onClick={() => selectedItem && onDuplicate(selectedItem)}
+            disabled={!selectedItem}
+            title={lang === "es" ? "Duplicar seleccionado" : "Duplicate selected"}
+            className="flex items-center justify-center rounded-lg"
+            style={{
+              width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
+              cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? CS.text : CS.muted,
+              opacity: selectedItem ? 1 : 0.4,
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Delete selected */}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-dm-sans" style={{ color: "#ef4444" }}>
+                {lang === "es" ? "¿Eliminar?" : "Delete?"}
+              </span>
+              <button onClick={handleDeleteSelected}
+                className="text-xs font-dm-sans px-2 py-1 rounded-lg"
+                style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "none", cursor: "pointer" }}>
+                {lang === "es" ? "Sí" : "Yes"}
+              </button>
+              <button onClick={() => setConfirmDelete(false)}
+                className="text-xs font-dm-sans px-2 py-1 rounded-lg"
+                style={{ background: "none", color: CS.muted, border: `1px solid ${CS.border}`, cursor: "pointer" }}>
+                {lang === "es" ? "No" : "No"}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => selectedItem && setConfirmDelete(true)}
+              disabled={!selectedItem}
+              title={lang === "es" ? "Eliminar seleccionado" : "Delete selected"}
+              className="flex items-center justify-center rounded-lg"
+              style={{
+                width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
+                cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? "#ef4444" : CS.muted,
+                opacity: selectedItem ? 1 : 0.4,
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          <div className="w-px self-stretch" style={{ background: CS.border }} />
+
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1" style={{ maxWidth: 280 }}>
+            <Search className="h-3.5 w-3.5 shrink-0" style={{ color: CS.muted }} />
+            <input
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder={lang === "es" ? "Buscar APUs..." : "Search APUs..."}
+              className="flex-1 bg-transparent text-sm font-dm-sans outline-none"
+              style={{ color: CS.text }}
+            />
+            {search && (
+              <button onClick={() => onSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}>
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {selectedItem && (
+            <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es" ? "Seleccionado:" : "Selected:"} <code style={{ color: CS.accent }}>{selectedItem.code}</code>
             </span>
-            <span className="font-syne font-bold text-xl" style={{ color: CS.accent }}>
-              {fmt(totalSelling)}
-            </span>
+          )}
+        </div>
+      )}
+
+      {/* Confirm delete dialog */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
+          <div className="flex flex-col gap-4 p-6 rounded-2xl"
+            style={{ background: CS.surface, border: `1px solid ${CS.border}`, maxWidth: 360, width: "100%" }}>
+            <div className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5" style={{ color: "#ef4444" }} />
+              <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
+                {lang === "es" ? "Eliminar APU" : "Delete APU"}
+              </span>
+            </div>
+            <p className="text-sm font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es"
+                ? `¿Eliminar "${selectedItem?.description}"? Esta acción no se puede deshacer.`
+                : `Delete "${selectedItem?.description}"? This cannot be undone.`}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setConfirmDelete(false)}
+                className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+                style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
+                {lang === "es" ? "Cancelar" : "Cancel"}
+              </button>
+              <button onClick={handleDeleteSelected}
+                className="px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+                style={{ background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }}>
+                {lang === "es" ? "Eliminar" : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1291,104 +1757,462 @@ function APUList({ items, language, fmt, onNew, onEdit, onDelete, onAI, onLibrar
   );
 }
 
-// ─── Main APUTab export ───────────────────────────────────────────────────────
+// ─── Send to Budget Modal ─────────────────────────────────────────────────────
 
-type View =
-  | { kind: "list" }
-  | { kind: "editor"; draft: EditorDraft };
+function SendToBudgetModal({
+  item, projectId, language, onConfirm, onClose,
+}: {
+  item: ApuItem;
+  projectId: string;
+  language: Locale;
+  onConfirm: (item: ApuItem, section: string, qty: number) => Promise<void>;
+  onClose: () => void;
+}) {
+  const supabase = createClient();
+  const [section, setSection] = useState("");
+  const [quantity, setQuantity] = useState("1");
+  const [saving, setSaving] = useState(false);
+  const [existingSections, setExistingSections] = useState<string[]>([]);
+  const lang = language;
+
+  useEffect(() => {
+    async function loadSections() {
+      const { data } = await supabase
+        .from("budget_rows")
+        .select("section")
+        .eq("project_id", projectId);
+      if (data) {
+        const seen = new Set<string>();
+        const unique: string[] = [];
+        for (const r of data as { section: string }[]) {
+          const trimmed = r.section.trim();
+          if (trimmed && !seen.has(trimmed)) { seen.add(trimmed); unique.push(trimmed); }
+        }
+        setExistingSections(unique);
+
+        // Pre-fill section from APU category
+        if (item.category) {
+          const catLabel = getCategoryLabel(item.category, language);
+          // If a chapter with the exact category name exists, use it
+          const match = unique.find(
+            (s) => s.toUpperCase() === item.category!.toUpperCase() || s.toUpperCase() === catLabel.toUpperCase()
+          );
+          setSection(match ?? item.category);
+        }
+      }
+    }
+    loadSections();
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [projectId, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSubmit() {
+    setSaving(true);
+    await onConfirm(item, section || "APU", parseFloat(quantity) || 1);
+    setSaving(false);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full flex flex-col gap-4"
+        style={{
+          maxWidth: 420, background: CS.surface,
+          border: `1px solid ${CS.border}`, borderRadius: 16,
+          padding: "1.5rem", boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
+            {lang === "es" ? "Agregar al Presupuesto" : "Add to Budget"}
+          </span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}>
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* APU summary */}
+        <div
+          className="rounded-[10px] p-3"
+          style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.15)" }}
+        >
+          <p className="text-xs font-dm-sans font-medium" style={{ color: CS.accent }}>{item.code}</p>
+          <p className="text-sm font-dm-sans mt-0.5 truncate" style={{ color: CS.text }}>{item.description}</p>
+          <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
+            {item.unit} · {lang === "es" ? "P.V." : "S.P."}: <strong style={{ color: CS.accent }}>{item.selling_price.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</strong>
+          </p>
+        </div>
+
+        {/* Section */}
+        <div>
+          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 500, color: CS.muted, fontFamily: "var(--font-dm-sans)", marginBottom: 4 }}>
+            {lang === "es" ? "Capítulo / Sección" : "Chapter / Section"}
+          </label>
+          <input
+            list="apu-budget-sections"
+            style={{ width: "100%", padding: "0.4rem 0.625rem", borderRadius: 8, border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.04)", color: CS.text, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", outline: "none" }}
+            value={section}
+            onChange={(e) => setSection(e.target.value)}
+            placeholder={lang === "es" ? "Ej. 03 · CONCRETO" : "E.g. 03 · CONCRETE"}
+            autoFocus
+          />
+          <datalist id="apu-budget-sections">
+            {existingSections.map((s) => <option key={s} value={s} />)}
+          </datalist>
+        </div>
+
+        {/* Quantity */}
+        <div>
+          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 500, color: CS.muted, fontFamily: "var(--font-dm-sans)", marginBottom: 4 }}>
+            {lang === "es" ? "Cantidad" : "Quantity"}
+          </label>
+          <input
+            type="number"
+            min={0}
+            step="any"
+            style={{ width: "100%", padding: "0.4rem 0.625rem", borderRadius: 8, border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.04)", color: CS.text, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", outline: "none" }}
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+          />
+        </div>
+
+        <div className="flex gap-2 justify-end pt-1">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
+            {lang === "es" ? "Cancelar" : "Cancel"}
+          </button>
+          <button onClick={handleSubmit} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+            style={{ background: CS.accent, color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <ArrowRight className="h-3.5 w-3.5" />
+            {lang === "es" ? "Agregar" : "Add"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main APUTab ──────────────────────────────────────────────────────────────
+
+type View = { kind: "list" } | { kind: "editor"; draft: EditorDraft };
 
 interface APUTabProps {
   initialItems: ApuItem[];
+  onCountChange?: (n: number) => void;
 }
 
-export default function APUTab({ initialItems }: APUTabProps) {
-  const { projectId, language, currency, fmt } = useWorkspace();
+export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
+  const { projectId, language, currency, fmt, projectSettings, setActiveTab } = useWorkspace();
+  const { toast } = useToast();
   const [items, setItems]   = useState<ApuItem[]>(initialItems);
   const [view, setView]     = useState<View>({ kind: "list" });
   const [showLibrary, setShowLibrary] = useState(false);
   const [showAI, setShowAI]           = useState(false);
+  const [selectedId, setSelectedId]   = useState<string | null>(null);
+  const [search, setSearch]           = useState("");
+  const [sendItem, setSendItem]       = useState<ApuItem | null>(null); // APU → Budget modal
 
-  function openNew() {
-    setView({ kind: "editor", draft: { ...EMPTY_DRAFT } });
-  }
+  // ── realtime subscription ─────────────────────────────────────────────────
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`apu:${projectId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "apu_items", filter: `project_id=eq.${projectId}` },
+        (payload) => {
+          if (payload.eventType === "INSERT") {
+            const newItem = payload.new as ApuItem;
+            setItems((prev) => {
+              if (prev.some((i) => i.id === newItem.id)) return prev;
+              return [newItem, ...prev];
+            });
+          } else if (payload.eventType === "UPDATE") {
+            const updated = payload.new as ApuItem;
+            setItems((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+          } else if (payload.eventType === "DELETE") {
+            const deleted = payload.old as { id: string };
+            setItems((prev) => prev.filter((i) => i.id !== deleted.id));
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [projectId]);
 
-  function openEdit(item: ApuItem) {
-    setView({ kind: "editor", draft: itemToDraft(item) });
-  }
+  // ── one-time dedup cleanup: remove duplicate apu_items (same project_id + description + code) ──
+  useEffect(() => {
+    async function dedup() {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("apu_items")
+        .select("id, code, description, created_at")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: false });
+      if (!data || data.length === 0) return;
 
-  function handleSaved(saved: ApuItem) {
-    setItems((prev) => {
-      const idx = prev.findIndex((i) => i.id === saved.id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = saved;
-        return next;
+      const seen = new Map<string, string>(); // key → kept id (most recent)
+      const toDelete: string[] = [];
+      for (const row of data) {
+        const key = `${row.code}|||${row.description}`;
+        if (seen.has(key)) {
+          toDelete.push(row.id);
+        } else {
+          seen.set(key, row.id);
+        }
       }
-      return [saved, ...prev];
+      if (toDelete.length === 0) return;
+
+      const { error } = await supabase.from("apu_items").delete().in("id", toDelete);
+      if (!error) {
+        setItems((prev) => prev.filter((i) => !toDelete.includes(i.id)));
+      }
+    }
+    dedup();
+  }, [projectId]);
+
+  useEffect(() => { onCountChange?.(items.length); }, [items.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filteredItems = search.trim()
+    ? items.filter((i) =>
+        i.description.toLowerCase().includes(search.toLowerCase()) ||
+        i.code.toLowerCase().includes(search.toLowerCase())
+      )
+    : items;
+
+  function openNew() { setView({ kind: "editor", draft: { ...EMPTY_DRAFT } }); }
+  function openEdit(item: ApuItem) { setView({ kind: "editor", draft: itemToDraft(item) }); }
+
+  async function handleSaved(saved: ApuItem) {
+    const prev = items.find((i) => i.id === saved.id);
+    const priceChanged = prev && Math.abs(prev.selling_price - saved.selling_price) > 0.001;
+
+    setItems((list) => {
+      const idx = list.findIndex((i) => i.id === saved.id);
+      if (idx >= 0) { const next = [...list]; next[idx] = saved; return next; }
+      return [saved, ...list];
     });
     setView({ kind: "list" });
+
+    // If this is an update with a changed price, check for linked budget rows
+    if (priceChanged && saved.id) {
+      const supabase = createClient();
+      const { data: linked } = await supabase
+        .from("budget_rows")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("apu_item_id", saved.id);
+      if (linked && linked.length > 0) {
+        toast(
+          language === "es"
+            ? `Precio APU actualizado. ¿Sincronizar ${linked.length} partida(s) del presupuesto?`
+            : `APU price updated. Sync ${linked.length} linked budget row(s)?`,
+          "info",
+          {
+            label: language === "es" ? "Sincronizar" : "Sync",
+            onClick: async () => {
+              await supabase
+                .from("budget_rows")
+                .update({ unit_price: saved.selling_price })
+                .eq("apu_item_id", saved.id)
+                .eq("project_id", projectId);
+              toast(
+                language === "es"
+                  ? `${linked.length} partida(s) actualizadas`
+                  : `${linked.length} row(s) updated`,
+                "success"
+              );
+            },
+          }
+        );
+      }
+    }
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
+    const supabase = createClient();
+    const { error } = await supabase.from("apu_items").delete().eq("id", id);
+    if (error) {
+      toast(
+        language === "es"
+          ? "Error al eliminar el APU"
+          : "Failed to delete APU",
+        "error"
+      );
+      return;
+    }
     setItems((prev) => prev.filter((i) => i.id !== id));
-  }
-
-  // "AI Suggest" from list → open editor pre-filled
-  function handleListAI() {
-    // Open AI modal; on fill, open editor with the result
-    setShowAI(true);
-  }
-
-  function handleAIFillFromList(filled: Partial<EditorDraft>) {
-    setView({ kind: "editor", draft: { ...EMPTY_DRAFT, ...filled } });
-  }
-
-  if (view.kind === "editor") {
-    return (
-      <>
-        <APUEditor
-          initialDraft={view.draft}
-          language={language}
-          currency={currency}
-          fmt={fmt}
-          projectId={projectId}
-          onSaved={handleSaved}
-          onCancel={() => setView({ kind: "list" })}
-        />
-      </>
+    if (selectedId === id) setSelectedId(null);
+    toast(
+      language === "es" ? "APU eliminado" : "APU deleted",
+      "success"
     );
+  }
+
+  async function handleDuplicate(source: ApuItem) {
+    const supabase = createClient();
+    // Generate a unique code: append "-2", or increment existing suffix
+    const codeMatch = source.code.match(/^(.*?)(-(\d+))?$/);
+    const baseCode = codeMatch?.[1] ?? source.code;
+    const existingNums = items
+      .map((i) => { const m = i.code.match(/^(.*?)-(\d+)$/); return m && m[1] === baseCode ? parseInt(m[2]) : null; })
+      .filter((n): n is number => n !== null);
+    const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 2;
+    const newCode = `${baseCode}-${nextNum}`;
+
+    const payload = {
+      project_id:    projectId,
+      code:          newCode,
+      description:   source.description,
+      unit:          source.unit,
+      category:      source.category ?? null,
+      materials:     source.materials,
+      labor:         source.labor,
+      equipment:     source.equipment,
+      direct_cost:   source.direct_cost,
+      overhead_pct:  source.overhead_pct,
+      profit_pct:    source.profit_pct,
+      selling_price: source.selling_price,
+    };
+    const { data, error } = await supabase.from("apu_items").insert(payload).select().single();
+    if (!error && data) {
+      setItems((prev) => {
+        // Insert immediately after the source item
+        const idx = prev.findIndex((i) => i.id === source.id);
+        const next = [...prev];
+        next.splice(idx + 1, 0, data as ApuItem);
+        return next;
+      });
+      setSelectedId((data as ApuItem).id);
+    }
+  }
+
+  function handleSendToBudget(item: ApuItem) {
+    setSendItem(item);
+  }
+
+  async function handleConfirmSendToBudget(item: ApuItem, section: string, quantity: number) {
+    const supabase = createClient();
+    const { data: maxRow } = await supabase
+      .from("budget_rows")
+      .select("sort_order")
+      .eq("project_id", projectId)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    const nextOrder = ((maxRow?.[0]?.sort_order ?? 0) as number) + 1;
+    const { error } = await supabase.from("budget_rows").insert({
+      project_id:  projectId,
+      apu_item_id: item.id,
+      section:     section.trim() || "APU",
+      code:        item.code,
+      description: item.description,
+      unit:        item.unit,
+      quantity,
+      unit_price:  item.selling_price,
+      status:      "pending" as const,
+      sort_order:  nextOrder,
+    });
+    setSendItem(null);
+    if (!error) {
+      toast(
+        language === "es"
+          ? `"${item.description}" agregado al presupuesto`
+          : `"${item.description}" added to budget`,
+        "success"
+      );
+      setActiveTab("budget");
+    }
   }
 
   return (
     <>
-      <APUList
-        items={items}
-        language={language}
-        fmt={fmt}
-        onNew={openNew}
-        onEdit={openEdit}
-        onDelete={handleDelete}
-        onAI={handleListAI}
-        onLibrary={() => setShowLibrary(true)}
-      />
+      {view.kind === "list" && (
+        <APUList
+          items={filteredItems}
+          language={language}
+          fmt={fmt}
+          selectedId={selectedId}
+          search={search}
+          onSelect={(id) => setSelectedId(id || null)}
+          onNew={openNew}
+          onEdit={openEdit}
+          onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
+          onSendToBudget={handleSendToBudget}
+          onPrint={(item) => printAPU(item, projectSettings, fmt, language as Locale)}
+          onSearch={setSearch}
+          onAI={() => setShowAI(true)}
+          onLibrary={() => setShowLibrary(true)}
+        />
+      )}
 
-      {showLibrary && (
+      {showLibrary && view.kind !== "editor" && (
         <LibraryModal
           language={language}
-          onInsert={() => {}}  // no-op from list view
+          onInsert={(entry, section) => {
+            const lineItem: ApuLineItem = { name: entry.name, unit: entry.unit, qty: 1, unit_price: entry.unit_price };
+            const draft: EditorDraft = {
+              ...EMPTY_DRAFT,
+              [section]: [lineItem],
+            };
+            setShowLibrary(false);
+            setView({ kind: "editor", draft });
+          }}
           onClose={() => setShowLibrary(false)}
         />
       )}
 
-      {showAI && (
+      {showAI && view.kind !== "editor" && (
         <AIModal
-          onFill={(filled) => {
-            setShowAI(false);
-            handleAIFillFromList(filled);
-          }}
+          onFill={(filled) => { setShowAI(false); setView({ kind: "editor", draft: { ...EMPTY_DRAFT, ...filled } }); }}
           onClose={() => setShowAI(false)}
         />
+      )}
+
+      {sendItem && (
+        <SendToBudgetModal
+          item={sendItem}
+          projectId={projectId}
+          language={language}
+          onConfirm={handleConfirmSendToBudget}
+          onClose={() => setSendItem(null)}
+        />
+      )}
+
+      {view.kind === "editor" && (
+        <div className="fixed inset-0 z-40 flex items-start justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", paddingTop: 80 }}>
+          <div className="w-full flex flex-col"
+            style={{
+              maxWidth: 1080, height: "calc(100vh - 120px)",
+              background: CS.surface, border: `1px solid ${CS.border}`,
+              borderRadius: 16, overflow: "hidden",
+              boxShadow: "0 32px 96px rgba(0,0,0,0.6)",
+            }}>
+            <APUEditor
+              initialDraft={view.draft}
+              language={language}
+              currency={currency}
+              fmt={fmt}
+              projectId={projectId}
+              projectSettings={projectSettings}
+              onSaved={handleSaved}
+              onCancel={() => setView({ kind: "list" })}
+            />
+          </div>
+        </div>
       )}
     </>
   );
 }
+
+// ─── Export helper for BudgetTab to reuse the formula ─────────────────────────
+export { ArrowLeft };

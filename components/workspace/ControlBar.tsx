@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { UserPlus, X, Mail } from "lucide-react";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { t } from "@/lib/utils/i18n";
@@ -74,18 +74,34 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
 
+  useEffect(() => {
+    if (!inviteOpen) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setInviteOpen(false); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [inviteOpen]);
+
   return (
     <>
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Currency toggle */}
-        <PillToggle<Currency>
-          options={[
-            { value: "USD", label: "USD" },
-            { value: "MXN", label: "MXN" },
-          ]}
+        {/* Currency select */}
+        <select
           value={currency}
-          onChange={setCurrency}
-        />
+          onChange={(e) => setCurrency(e.target.value as Currency)}
+          className="text-xs font-semibold font-dm-sans rounded-lg px-2 py-1"
+          style={{
+            border: "1px solid var(--cs-border)",
+            background: "rgba(255,255,255,0.03)",
+            color: "var(--cs-text)",
+            cursor: "pointer",
+            outline: "none",
+          }}
+          aria-label="Currency"
+        >
+          <option value="USD">USD</option>
+          <option value="MXN">MXN</option>
+          <option value="COP">COP</option>
+        </select>
 
         {/* Unit system toggle */}
         <PillToggle<"m" | "ft">

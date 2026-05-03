@@ -17,13 +17,9 @@ export interface AIAPUResult {
   code: string;
   description: string;
   unit: string;
-  overhead_pct: number;
-  profit_pct: number;
   materials: AIAPULineItem[];
   labor: AIAPULineItem[];
   equipment: AIAPULineItem[];
-  direct_cost: number;
-  selling_price: number;
 }
 
 export interface AIAPUParams {

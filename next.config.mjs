@@ -1,8 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Required: prevents Next.js from bundling the ESM-only PDF library
-  serverExternalPackages: ["@react-pdf/renderer"],
-
   // Strict mode catches subtle React bugs during development
   reactStrictMode: true,
 

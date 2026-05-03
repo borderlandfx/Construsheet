@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { HardHat, LogOut, Moon, Sun } from "lucide-react";
+import { HardHat, LogOut, Moon, Settings, Sun } from "lucide-react";
 import type { Locale } from "@/lib/utils/i18n";
 import { t } from "@/lib/utils/i18n";
 
@@ -28,10 +28,7 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
   }
 
   function toggleTheme() {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    // Persist to user profile (fire-and-forget)
-    supabase.from("profiles").update({ language: locale }).eq("id", user.id);
+    setTheme(theme === "dark" ? "light" : "dark");
   }
 
   const displayName = fullName || user.email?.split("@")[0] || "User";
@@ -103,6 +100,27 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
         >
           {displayName}
         </span>
+
+        {/* Settings link */}
+        <Link
+          href="/settings"
+          aria-label={t("settings", locale)}
+          title={t("settings", locale)}
+          className="flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
+          style={{
+            width: 34,
+            height: 34,
+            border: "1px solid var(--cs-border)",
+            background: "transparent",
+            color: "var(--cs-muted)",
+            textDecoration: "none",
+            flexShrink: 0,
+          }}
+          onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--cs-text)")}
+          onMouseLeave={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "var(--cs-muted)")}
+        >
+          <Settings className="h-4 w-4" aria-hidden="true" />
+        </Link>
 
         {/* Theme toggle */}
         <button

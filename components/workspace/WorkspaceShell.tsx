@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import Link from "next/link";
-import { ArrowLeft, Pencil, Check } from "lucide-react";
+import { ArrowLeft, Pencil, Check, Settings2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { WorkspaceProvider, useWorkspace } from "@/lib/context/WorkspaceContext";
-import TabBar, { type TabId } from "@/components/workspace/TabBar";
+import TabBar from "@/components/workspace/TabBar";
 import ControlBar from "@/components/workspace/ControlBar";
 import APUTab from "@/components/workspace/APUTab";
 import BudgetTab from "@/components/workspace/BudgetTab";
 import GanttTab from "@/components/workspace/GanttTab";
-import type { Project, ApuItem, BudgetRow, GanttTask } from "@/lib/types/database.types";
+import TakeoffTab from "@/components/workspace/TakeoffTab";
+import ReportsTab from "@/components/workspace/ReportsTab";
+import IndirectCostsPanel from "@/components/workspace/IndirectCostsPanel";
+import type { Project, ApuItem, BudgetRow, GanttTask, TakeoffItem, ProjectIndirectCosts } from "@/lib/types/database.types";
 import type { Currency } from "@/lib/utils/currency";
 import type { Locale } from "@/lib/utils/i18n";
 
@@ -88,7 +91,7 @@ function ProjectNameEditor({ initialName, projectId }: { initialName: string; pr
   );
 }
 
-// ─── Status pill for project ──────────────────────────────────────────────────
+// ─── Status changer for project ──────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   active:    { bg: "rgba(34,197,94,0.1)",   color: "#22c55e" },
@@ -96,21 +99,74 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   archived:  { bg: "rgba(107,114,128,0.1)", color: "#6b7280" },
 };
 
-function StatusPill({ status, language }: { status: string; language: Locale }) {
+const STATUS_LABELS: Record<string, Record<Locale, string>> = {
+  active:    { es: "Activo",     en: "Active"    },
+  completed: { es: "Completado", en: "Completed" },
+  archived:  { es: "Archivado",  en: "Archived"  },
+};
+
+function StatusChanger({ projectId, status: initialStatus, language }: { projectId: string; status: string; language: Locale }) {
+  const supabase = createClient();
+  const [status, setStatus] = useState(initialStatus);
+  const [open, setOpen] = useState(false);
   const cfg = STATUS_COLORS[status] ?? STATUS_COLORS.active;
-  const labels: Record<string, Record<Locale, string>> = {
-    active:    { es: "Activo",    en: "Active"    },
-    completed: { es: "Completado", en: "Completed" },
-    archived:  { es: "Archivado", en: "Archived"  },
-  };
+
+  async function handleChange(next: string) {
+    setStatus(next);
+    setOpen(false);
+    await supabase.from("projects").update({ status: next as "active" | "archived" | "completed" }).eq("id", projectId);
+  }
+
   return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium font-dm-sans"
-      style={{ background: cfg.bg, color: cfg.color }}
-    >
-      <span className="rounded-full" style={{ width: 5, height: 5, background: cfg.color, display: "inline-block" }} />
-      {labels[status]?.[language] ?? status}
-    </span>
+    <div className="relative" style={{ zIndex: 10 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium font-dm-sans cursor-pointer transition-opacity hover:opacity-80"
+        style={{ background: cfg.bg, color: cfg.color, border: "none" }}
+        title={language === "es" ? "Cambiar estado" : "Change status"}
+      >
+        <span className="rounded-full" style={{ width: 5, height: 5, background: cfg.color, display: "inline-block" }} />
+        {STATUS_LABELS[status]?.[language] ?? status}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          <div
+            className="absolute top-full mt-1 left-0 z-30 rounded-xl py-1 overflow-hidden"
+            style={{
+              background: "var(--cs-surface)",
+              border: "1px solid var(--cs-border)",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              minWidth: 140,
+            }}
+          >
+            {["active", "completed", "archived"].map((s) => {
+              const c = STATUS_COLORS[s];
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => handleChange(s)}
+                  className="flex items-center gap-2 px-4 py-2 w-full text-xs font-medium font-dm-sans"
+                  style={{
+                    background: s === status ? "rgba(255,255,255,0.06)" : "none",
+                    border: "none",
+                    cursor: "pointer",
+                    color: s === status ? c.color : "var(--cs-text)",
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)"; }}
+                  onMouseLeave={(e) => { if (s !== status) (e.currentTarget as HTMLButtonElement).style.background = "none"; }}
+                >
+                  <span className="rounded-full shrink-0" style={{ width: 7, height: 7, background: c.color, display: "inline-block" }} />
+                  {STATUS_LABELS[s]?.[language] ?? s}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -121,17 +177,31 @@ function WorkspaceInner({
   apuItems,
   budgetRows,
   ganttTasks,
+  takeoffItems,
   userEmail,
 }: {
   project: Project;
   apuItems: ApuItem[];
   budgetRows: BudgetRow[];
   ganttTasks: GanttTask[];
+  takeoffItems: TakeoffItem[];
   userEmail: string;
 }) {
-  const { language, projectId } = useWorkspace();
-  const [activeTab, setActiveTab] = useState<TabId>("apu");
+  const { language, projectId, activeTab, setActiveTab } = useWorkspace();
+  const isEs = language === "es";
+  const [showCosts, setShowCosts] = useState(false);
   const userInitial = userEmail.charAt(0);
+
+  // Live tab counts — updated by each tab's realtime subscription
+  const [counts, setCounts] = useState({
+    apu:     apuItems.length,
+    budget:  budgetRows.length,
+    gantt:   ganttTasks.length,
+    takeoff: takeoffItems.length,
+  });
+  const setTabCount = useCallback((tab: "apu" | "budget" | "gantt" | "takeoff", n: number) => {
+    setCounts((prev) => prev[tab] === n ? prev : { ...prev, [tab]: n });
+  }, []);
 
   return (
     // Escape layout padding with negative margin; fill remaining viewport below fixed navbar
@@ -178,7 +248,7 @@ function WorkspaceInner({
         {/* Project name + status */}
         <div className="flex items-center gap-2 min-w-0">
           <ProjectNameEditor initialName={project.name} projectId={projectId} />
-          <StatusPill status={project.status} language={language} />
+          <StatusChanger projectId={projectId} status={project.status} language={language} />
           {project.location && (
             <span className="text-xs font-dm-sans hidden sm:block" style={{ color: "var(--cs-muted)" }}>
               · {project.location}
@@ -189,12 +259,40 @@ function WorkspaceInner({
         {/* Push controls to the right */}
         <div className="flex-1" />
 
+        {/* Indirect costs settings button */}
+        <button
+          type="button"
+          onClick={() => setShowCosts(true)}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium font-dm-sans transition-colors shrink-0"
+          style={{
+            border: "1px solid var(--cs-border)",
+            background: "transparent",
+            color: "var(--cs-muted)",
+            cursor: "pointer",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = "var(--cs-text)";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cs-accent)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.color = "var(--cs-muted)";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--cs-border)";
+          }}
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+          {isEs ? "Costos" : "Costs"}
+        </button>
+
         {/* Control bar */}
         <ControlBar userEmail={userEmail} userInitial={userInitial} />
       </div>
 
       {/* ── Tab bar ─────────────────────────────────── */}
-      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        counts={counts}
+      />
 
       {/* ── Tab content (scrollable) ─────────────────── */}
       <div
@@ -202,11 +300,18 @@ function WorkspaceInner({
         style={{ background: "var(--cs-bg)" }}
       >
         <div style={{ padding: "1.5rem", maxWidth: 1100, margin: "0 auto" }}>
-          {activeTab === "apu" && <APUTab initialItems={apuItems} />}
-          {activeTab === "budget" && <BudgetTab initialRows={budgetRows} />}
-          {activeTab === "gantt" && <GanttTab initialTasks={ganttTasks} />}
+          {activeTab === "apu"     && <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />}
+          {activeTab === "budget"  && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
+          {activeTab === "gantt"   && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
+          {activeTab === "takeoff" && <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />}
+          {activeTab === "reports" && <ReportsTab />}
         </div>
       </div>
+
+      {/* ── Indirect costs panel ─────────────────────── */}
+      {showCosts && (
+        <IndirectCostsPanel onClose={() => setShowCosts(false)} />
+      )}
     </div>
   );
 }
@@ -218,10 +323,12 @@ export interface WorkspaceShellProps {
   apuItems: ApuItem[];
   budgetRows: BudgetRow[];
   ganttTasks: GanttTask[];
+  takeoffItems: TakeoffItem[];
   userId: string;
   userEmail: string;
   initialCurrency: Currency;
   initialLanguage: Locale;
+  initialSettings?: ProjectIndirectCosts;
 }
 
 export default function WorkspaceShell({
@@ -229,10 +336,12 @@ export default function WorkspaceShell({
   apuItems,
   budgetRows,
   ganttTasks,
+  takeoffItems,
   userId,
   userEmail,
   initialCurrency,
   initialLanguage,
+  initialSettings,
 }: WorkspaceShellProps) {
   return (
     <WorkspaceProvider
@@ -240,12 +349,14 @@ export default function WorkspaceShell({
       userId={userId}
       initialCurrency={initialCurrency}
       initialLanguage={initialLanguage}
+      initialSettings={initialSettings}
     >
       <WorkspaceInner
         project={project}
         apuItems={apuItems}
         budgetRows={budgetRows}
         ganttTasks={ganttTasks}
+        takeoffItems={takeoffItems}
         userEmail={userEmail}
       />
     </WorkspaceProvider>

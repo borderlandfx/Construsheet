@@ -16,6 +16,6 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.redirect(
-    `${origin}/auth/login?error=${encodeURIComponent("No se pudo autenticar. Intenta de nuevo.")}`
+    `${origin}/auth/login?error=auth_failed`
   );
 }

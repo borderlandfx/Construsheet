@@ -59,7 +59,7 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
         border: `1px solid ${cfg.border}`,
         boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
         minWidth: 260,
-        maxWidth: 380,
+        maxWidth: item.action ? 460 : 380,
         transform: visible ? "translateX(0)" : "translateX(110%)",
         opacity: visible ? 1 : 0,
         transition: "transform 240ms cubic-bezier(0.16,1,0.3,1), opacity 200ms ease",
@@ -91,6 +91,22 @@ function ToastCard({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
       >
         {item.message}
       </span>
+
+      {item.action && (
+        <button
+          onClick={() => { item.action!.onClick(); onDismiss(); }}
+          className="font-dm-sans text-xs font-semibold shrink-0 rounded-lg px-2.5 py-1"
+          style={{
+            background: cfg.iconColor + "22",
+            border: `1px solid ${cfg.iconColor}55`,
+            color: cfg.iconColor,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {item.action.label}
+        </button>
+      )}
 
       <button
         onClick={onDismiss}

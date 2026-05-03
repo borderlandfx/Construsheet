@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import WorkspaceShell from "@/components/workspace/WorkspaceShell";
 import type { Currency } from "@/lib/utils/currency";
 import type { Locale } from "@/lib/utils/i18n";
-import type { ApuItem, BudgetRow, GanttTask } from "@/lib/types/database.types";
+import type { ApuItem, BudgetRow, GanttTask, TakeoffItem, ProjectIndirectCosts } from "@/lib/types/database.types";
 
 interface ProjectPageProps {
   params: Promise<{ id: string }>;
@@ -29,35 +29,34 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   if (!project) notFound();
 
-  // Load profile for language/currency preference
+  // Load profile for language/currency preference and default indirect costs
   const { data: profile } = await supabase
     .from("profiles")
-    .select("language, currency_pref")
+    .select("language, currency_pref, default_indirect_costs")
     .eq("id", user.id)
     .single();
 
   // Load workspace data in parallel
-  const [{ data: apuItems }, { data: budgetRows }, { data: ganttTasks }] =
-    await Promise.all([
-      supabase
-        .from("apu_items")
-        .select("*")
-        .eq("project_id", id)
-        .order("created_at"),
-      supabase
-        .from("budget_rows")
-        .select("*")
-        .eq("project_id", id)
-        .order("sort_order"),
-      supabase
-        .from("gantt_tasks")
-        .select("*")
-        .eq("project_id", id)
-        .order("sort_order"),
-    ]);
+  const [
+    { data: apuItems },
+    { data: budgetRows },
+    { data: ganttTasks },
+    { data: takeoffItems },
+  ] = await Promise.all([
+    supabase.from("apu_items").select("*").eq("project_id", id).order("created_at"),
+    supabase.from("budget_rows").select("*").eq("project_id", id).order("sort_order"),
+    supabase.from("gantt_tasks").select("*").eq("project_id", id).order("sort_order"),
+    supabase.from("takeoff_items").select("*").eq("project_id", id).order("sort_order"),
+  ]);
 
   const initialCurrency = (project.currency ?? profile?.currency_pref ?? "USD") as Currency;
   const initialLanguage = (profile?.language ?? "es") as Locale;
+  // Project-level settings take precedence; fall back to user default
+  const initialSettings = (
+    (project.project_settings && Object.keys(project.project_settings as object).length > 0
+      ? project.project_settings
+      : profile?.default_indirect_costs) ?? undefined
+  ) as ProjectIndirectCosts | undefined;
 
   return (
     <WorkspaceShell
@@ -65,10 +64,12 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       apuItems={(apuItems as ApuItem[]) ?? []}
       budgetRows={(budgetRows as BudgetRow[]) ?? []}
       ganttTasks={(ganttTasks as GanttTask[]) ?? []}
+      takeoffItems={(takeoffItems as TakeoffItem[]) ?? []}
       userId={user.id}
       userEmail={user.email ?? ""}
       initialCurrency={initialCurrency}
       initialLanguage={initialLanguage}
+      initialSettings={initialSettings}
     />
   );
 }

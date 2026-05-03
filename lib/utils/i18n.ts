@@ -114,6 +114,9 @@ const translations = {
     unitPrice:         "Unit Price",
     total:             "Total",
     category:          "Category",
+    noCategory:        "No category",
+    allCategories:     "All categories",
+    filterByCategory:  "Filter by category",
     // APU cost components
     materials:         "Materials",
     labor:             "Labour",
@@ -162,6 +165,7 @@ const translations = {
     error:             "An error occurred",
     loading:           "Loading…",
     generatingAI:      "Analysing construction activity…",
+    authFailed:        "Authentication failed. Please try again.",
   },
 
   es: {
@@ -273,6 +277,9 @@ const translations = {
     unitPrice:         "Precio Unitario",
     total:             "Total",
     category:          "Categoría",
+    noCategory:        "Sin categoría",
+    allCategories:     "Todas las categorías",
+    filterByCategory:  "Filtrar por categoría",
     // APU cost components
     materials:         "Materiales",
     labor:             "Mano de Obra",
@@ -321,6 +328,7 @@ const translations = {
     error:             "Ocurrió un error",
     loading:           "Cargando…",
     generatingAI:      "Analizando concepto de obra…",
+    authFailed:        "No se pudo autenticar. Intenta de nuevo.",
   },
 } as const;
 

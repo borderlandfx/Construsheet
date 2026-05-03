@@ -6,28 +6,37 @@
 -- 1. PROFILES
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS profiles (
-  id            UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email         TEXT        NOT NULL,
-  full_name     TEXT,
-  language      TEXT        DEFAULT 'es' CHECK (language IN ('es', 'en')),
-  currency_pref TEXT        DEFAULT 'USD' CHECK (currency_pref IN ('USD', 'MXN')),
-  created_at    TIMESTAMPTZ DEFAULT NOW()
+  id                     UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email                  TEXT        NOT NULL,
+  full_name              TEXT,
+  language               TEXT        DEFAULT 'es' CHECK (language IN ('es', 'en')),
+  currency_pref          TEXT        DEFAULT 'USD' CHECK (currency_pref IN ('USD', 'MXN', 'COP')),
+  default_indirect_costs JSONB,
+  created_at             TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ---------------------------------------------------------------------------
 -- 2. PROJECTS
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS projects (
-  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  name        TEXT        NOT NULL,
-  location    TEXT,
-  description TEXT,
-  currency    TEXT        DEFAULT 'USD',
-  status      TEXT        DEFAULT 'active' CHECK (status IN ('active', 'archived', 'completed')),
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id          UUID        NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name             TEXT        NOT NULL,
+  location         TEXT,
+  description      TEXT,
+  currency         TEXT        DEFAULT 'USD',
+  status           TEXT        DEFAULT 'active' CHECK (status IN ('active', 'archived', 'completed')),
+  project_settings JSONB       DEFAULT '{}'::jsonb,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration helpers (safe to run on existing databases)
+ALTER TABLE profiles  ADD COLUMN IF NOT EXISTS default_indirect_costs JSONB;
+ALTER TABLE projects  ADD COLUMN IF NOT EXISTS project_settings       JSONB DEFAULT '{}'::jsonb;
+-- Drop and re-add check constraint to allow COP (run only if constraint exists)
+-- ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_currency_pref_check;
+-- ALTER TABLE profiles ADD CONSTRAINT profiles_currency_pref_check CHECK (currency_pref IN ('USD', 'MXN', 'COP'));
 
 -- ---------------------------------------------------------------------------
 -- 3. APU_ITEMS  (Unit Price Analysis)
@@ -44,10 +53,14 @@ CREATE TABLE IF NOT EXISTS apu_items (
   direct_cost   DECIMAL(12,2)  DEFAULT 0,
   overhead_pct  DECIMAL(5,2)   DEFAULT 12,
   profit_pct    DECIMAL(5,2)   DEFAULT 5,
+  category      TEXT,
   selling_price DECIMAL(12,2)  DEFAULT 0,
   created_at    TIMESTAMPTZ    DEFAULT NOW(),
   updated_at    TIMESTAMPTZ    DEFAULT NOW()
 );
+
+-- Migration: add category column to existing apu_items tables
+ALTER TABLE apu_items ADD COLUMN IF NOT EXISTS category TEXT;
 
 -- ---------------------------------------------------------------------------
 -- 4. BUDGET_ROWS
@@ -81,9 +94,17 @@ CREATE TABLE IF NOT EXISTS gantt_tasks (
   duration_weeks INTEGER     DEFAULT 2,
   color          TEXT        DEFAULT '#f97316',
   status         TEXT        DEFAULT 'pending' CHECK (status IN ('complete', 'in-progress', 'pending')),
+  progress_pct   INTEGER     DEFAULT 0 CHECK (progress_pct BETWEEN 0 AND 100),
+  parent_task_id UUID        REFERENCES gantt_tasks(id) ON DELETE CASCADE,
+  budget_link    TEXT,
   sort_order     INTEGER     DEFAULT 0,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration helpers
+ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS progress_pct INTEGER DEFAULT 0 CHECK (progress_pct BETWEEN 0 AND 100);
+ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID REFERENCES gantt_tasks(id) ON DELETE CASCADE;
+ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS budget_link TEXT;
 
 -- =============================================================================
 -- INDEXES
@@ -101,12 +122,19 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
 AS $$
+DECLARE
+  _lang TEXT;
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
+  -- Respect the language the user chose on the sign-up form (stored in raw_user_meta_data)
+  _lang := COALESCE(NEW.raw_user_meta_data ->> 'language', 'es');
+  IF _lang NOT IN ('es', 'en') THEN _lang := 'es'; END IF;
+
+  INSERT INTO public.profiles (id, email, full_name, language)
   VALUES (
     NEW.id,
     NEW.email,
-    NEW.raw_user_meta_data ->> 'full_name'
+    NEW.raw_user_meta_data ->> 'full_name',
+    _lang
   );
   RETURN NEW;
 END;
@@ -233,6 +261,45 @@ CREATE POLICY "gantt_tasks_update_own" ON gantt_tasks
   );
 
 CREATE POLICY "gantt_tasks_delete_own" ON gantt_tasks
+  FOR DELETE USING (
+    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
+  );
+
+-- ---------------------------------------------------------------------------
+-- 6. TAKEOFF_ITEMS  (Quantity Takeoff)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS takeoff_items (
+  id          UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id  UUID           NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  element     TEXT           NOT NULL,
+  description TEXT,
+  unit        TEXT,
+  quantity    DECIMAL(12,3)  DEFAULT 0,
+  notes       TEXT,
+  sort_order  INTEGER        DEFAULT 0,
+  created_at  TIMESTAMPTZ    DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_takeoff_items_project_id ON takeoff_items(project_id);
+
+ALTER TABLE takeoff_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "takeoff_items_select_own" ON takeoff_items
+  FOR SELECT USING (
+    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "takeoff_items_insert_own" ON takeoff_items
+  FOR INSERT WITH CHECK (
+    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "takeoff_items_update_own" ON takeoff_items
+  FOR UPDATE USING (
+    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "takeoff_items_delete_own" ON takeoff_items
   FOR DELETE USING (
     project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
   );

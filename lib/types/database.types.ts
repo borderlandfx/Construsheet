@@ -7,6 +7,50 @@ export type Json =
   | Json[];
 
 // ---------------------------------------------------------------------------
+// Indirect Costs Settings (stored in project_settings JSONB)
+// ---------------------------------------------------------------------------
+export interface IndirectCostLine {
+  label: string;
+  pct: number;
+}
+
+export interface ProjectIndirectCosts {
+  // Materials indirects
+  pmat1: IndirectCostLine; // e.g. "Flete y acarreos" 3%
+  pmat2: IndirectCostLine; // e.g. "Merma y desperdicio" 2%
+  // Labor indirects
+  pmob1: IndirectCostLine; // e.g. "Seguridad y higiene" 3.5%
+  pmob2: IndirectCostLine; // e.g. "FSR" 2%
+  // Equipment indirects
+  pmaq1: IndirectCostLine; // e.g. "Herramienta menor" 3%
+  pmaq2: IndirectCostLine;
+  // General & admin expenses (applied to direct cost)
+  ggen:  IndirectCostLine; // e.g. "Gastos generales" 15%
+  pgas1: IndirectCostLine; // e.g. "Mochada" 0%
+  pgas2: IndirectCostLine;
+  // Profit (applied to net cost)
+  util:  IndirectCostLine; // e.g. "Utilidad" 10%
+  // Taxes (applied to selling price)
+  tot1:  IndirectCostLine; // e.g. "IVA" 16%
+  tot2:  IndirectCostLine;
+}
+
+export const DEFAULT_INDIRECT_COSTS: ProjectIndirectCosts = {
+  pmat1: { label: "Flete y acarreos",          pct: 3   },
+  pmat2: { label: "Merma y desperdicio",        pct: 2   },
+  pmob1: { label: "Seguridad y higiene",        pct: 3.5 },
+  pmob2: { label: "FSR",                        pct: 2   },
+  pmaq1: { label: "Herramienta menor",          pct: 3   },
+  pmaq2: { label: "",                           pct: 0   },
+  ggen:  { label: "Gastos generales y admin.",  pct: 15  },
+  pgas1: { label: "Mochada",                    pct: 0   },
+  pgas2: { label: "",                           pct: 0   },
+  util:  { label: "Utilidad",                   pct: 10  },
+  tot1:  { label: "IVA 16%",                    pct: 16  },
+  tot2:  { label: "",                           pct: 0   },
+};
+
+// ---------------------------------------------------------------------------
 // JSONB component shapes used in apu_items
 // ---------------------------------------------------------------------------
 export interface ApuLineItem {
@@ -29,7 +73,8 @@ export interface Database {
           email: string;
           full_name: string | null;
           language: "es" | "en";
-          currency_pref: "USD" | "MXN";
+          currency_pref: "USD" | "MXN" | "COP";
+          default_indirect_costs: ProjectIndirectCosts | null;
           created_at: string;
         };
         Insert: {
@@ -37,7 +82,8 @@ export interface Database {
           email: string;
           full_name?: string | null;
           language?: "es" | "en";
-          currency_pref?: "USD" | "MXN";
+          currency_pref?: "USD" | "MXN" | "COP";
+          default_indirect_costs?: ProjectIndirectCosts | null;
           created_at?: string;
         };
         Update: {
@@ -45,7 +91,8 @@ export interface Database {
           email?: string;
           full_name?: string | null;
           language?: "es" | "en";
-          currency_pref?: "USD" | "MXN";
+          currency_pref?: "USD" | "MXN" | "COP";
+          default_indirect_costs?: ProjectIndirectCosts | null;
         };
         Relationships: [];
       };
@@ -60,6 +107,7 @@ export interface Database {
           description: string | null;
           currency: string;
           status: "active" | "archived" | "completed";
+          project_settings: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -71,6 +119,7 @@ export interface Database {
           description?: string | null;
           currency?: string;
           status?: "active" | "archived" | "completed";
+          project_settings?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -82,6 +131,7 @@ export interface Database {
           description?: string | null;
           currency?: string;
           status?: "active" | "archived" | "completed";
+          project_settings?: Json | null;
           updated_at?: string;
         };
         Relationships: [
@@ -102,6 +152,7 @@ export interface Database {
           code: string;
           description: string;
           unit: string;
+          category: string | null;
           materials: ApuLineItem[];
           labor: ApuLineItem[];
           equipment: ApuLineItem[];
@@ -118,6 +169,7 @@ export interface Database {
           code: string;
           description: string;
           unit: string;
+          category?: string | null;
           materials?: ApuLineItem[];
           labor?: ApuLineItem[];
           equipment?: ApuLineItem[];
@@ -134,6 +186,7 @@ export interface Database {
           code?: string;
           description?: string;
           unit?: string;
+          category?: string | null;
           materials?: ApuLineItem[];
           labor?: ApuLineItem[];
           equipment?: ApuLineItem[];
@@ -218,6 +271,50 @@ export interface Database {
         ];
       };
 
+      // --- takeoff_items ----------------------------------------------------
+      takeoff_items: {
+        Row: {
+          id: string;
+          project_id: string;
+          element: string;
+          description: string | null;
+          unit: string | null;
+          quantity: number;
+          notes: string | null;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          project_id: string;
+          element: string;
+          description?: string | null;
+          unit?: string | null;
+          quantity?: number;
+          notes?: string | null;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          project_id?: string;
+          element?: string;
+          description?: string | null;
+          unit?: string | null;
+          quantity?: number;
+          notes?: string | null;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "takeoff_items_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+
       // --- gantt_tasks ------------------------------------------------------
       gantt_tasks: {
         Row: {
@@ -229,6 +326,9 @@ export interface Database {
           duration_weeks: number;
           color: string;
           status: "complete" | "in-progress" | "pending";
+          progress_pct: number;
+          parent_task_id: string | null;
+          budget_link: string | null;
           sort_order: number;
           created_at: string;
         };
@@ -241,6 +341,9 @@ export interface Database {
           duration_weeks?: number;
           color?: string;
           status?: "complete" | "in-progress" | "pending";
+          progress_pct?: number;
+          parent_task_id?: string | null;
+          budget_link?: string | null;
           sort_order?: number;
           created_at?: string;
         };
@@ -253,6 +356,9 @@ export interface Database {
           duration_weeks?: number;
           color?: string;
           status?: "complete" | "in-progress" | "pending";
+          progress_pct?: number;
+          parent_task_id?: string | null;
+          budget_link?: string | null;
           sort_order?: number;
         };
         Relationships: [
@@ -260,6 +366,12 @@ export interface Database {
             foreignKeyName: "gantt_tasks_project_id_fkey";
             columns: ["project_id"];
             referencedRelation: "projects";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "gantt_tasks_parent_task_id_fkey";
+            columns: ["parent_task_id"];
+            referencedRelation: "gantt_tasks";
             referencedColumns: ["id"];
           }
         ];
@@ -271,7 +383,7 @@ export interface Database {
 
     Enums: {
       language: "es" | "en";
-      currency_pref: "USD" | "MXN";
+      currency_pref: "USD" | "MXN" | "COP";
       project_status: "active" | "archived" | "completed";
       row_status: "approved" | "review" | "pending";
       task_status: "complete" | "in-progress" | "pending";
@@ -288,17 +400,20 @@ export type Profile    = Database["public"]["Tables"]["profiles"]["Row"];
 export type Project    = Database["public"]["Tables"]["projects"]["Row"];
 export type ApuItem    = Database["public"]["Tables"]["apu_items"]["Row"];
 export type BudgetRow  = Database["public"]["Tables"]["budget_rows"]["Row"];
-export type GanttTask  = Database["public"]["Tables"]["gantt_tasks"]["Row"];
+export type GanttTask    = Database["public"]["Tables"]["gantt_tasks"]["Row"];
+export type TakeoffItem  = Database["public"]["Tables"]["takeoff_items"]["Row"];
 
 // Insert / Update helpers
-export type ProjectInsert   = Database["public"]["Tables"]["projects"]["Insert"];
-export type ProjectUpdate   = Database["public"]["Tables"]["projects"]["Update"];
-export type ApuItemInsert   = Database["public"]["Tables"]["apu_items"]["Insert"];
-export type ApuItemUpdate   = Database["public"]["Tables"]["apu_items"]["Update"];
-export type BudgetRowInsert = Database["public"]["Tables"]["budget_rows"]["Insert"];
-export type BudgetRowUpdate = Database["public"]["Tables"]["budget_rows"]["Update"];
-export type GanttTaskInsert = Database["public"]["Tables"]["gantt_tasks"]["Insert"];
-export type GanttTaskUpdate = Database["public"]["Tables"]["gantt_tasks"]["Update"];
+export type ProjectInsert     = Database["public"]["Tables"]["projects"]["Insert"];
+export type ProjectUpdate     = Database["public"]["Tables"]["projects"]["Update"];
+export type ApuItemInsert     = Database["public"]["Tables"]["apu_items"]["Insert"];
+export type ApuItemUpdate     = Database["public"]["Tables"]["apu_items"]["Update"];
+export type BudgetRowInsert   = Database["public"]["Tables"]["budget_rows"]["Insert"];
+export type BudgetRowUpdate   = Database["public"]["Tables"]["budget_rows"]["Update"];
+export type GanttTaskInsert   = Database["public"]["Tables"]["gantt_tasks"]["Insert"];
+export type GanttTaskUpdate   = Database["public"]["Tables"]["gantt_tasks"]["Update"];
+export type TakeoffItemInsert = Database["public"]["Tables"]["takeoff_items"]["Insert"];
+export type TakeoffItemUpdate = Database["public"]["Tables"]["takeoff_items"]["Update"];
 
 // ---------------------------------------------------------------------------
 // Legacy aliases — keep workspace components compiling while they are migrated
