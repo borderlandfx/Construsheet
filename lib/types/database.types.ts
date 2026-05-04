@@ -328,7 +328,9 @@ export interface Database {
           status: "complete" | "in-progress" | "pending";
           progress_pct: number;
           parent_task_id: string | null;
-          budget_link: string | null;
+          budget_section: string | null;
+          is_chapter: boolean;
+
           sort_order: number;
           created_at: string;
         };
@@ -343,7 +345,9 @@ export interface Database {
           status?: "complete" | "in-progress" | "pending";
           progress_pct?: number;
           parent_task_id?: string | null;
-          budget_link?: string | null;
+          budget_section?: string | null;
+          is_chapter?: boolean;
+
           sort_order?: number;
           created_at?: string;
         };
@@ -358,7 +362,9 @@ export interface Database {
           status?: "complete" | "in-progress" | "pending";
           progress_pct?: number;
           parent_task_id?: string | null;
-          budget_link?: string | null;
+          budget_section?: string | null;
+          is_chapter?: boolean;
+
           sort_order?: number;
         };
         Relationships: [

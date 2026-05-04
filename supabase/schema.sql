@@ -96,7 +96,9 @@ CREATE TABLE IF NOT EXISTS gantt_tasks (
   status         TEXT        DEFAULT 'pending' CHECK (status IN ('complete', 'in-progress', 'pending')),
   progress_pct   INTEGER     DEFAULT 0 CHECK (progress_pct BETWEEN 0 AND 100),
   parent_task_id UUID        REFERENCES gantt_tasks(id) ON DELETE CASCADE,
-  budget_link    TEXT,
+  budget_section TEXT,
+  is_chapter     BOOLEAN     DEFAULT false,
+  budget_row_id  UUID        REFERENCES budget_rows(id) ON DELETE SET NULL,
   sort_order     INTEGER     DEFAULT 0,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
@@ -104,7 +106,9 @@ CREATE TABLE IF NOT EXISTS gantt_tasks (
 -- Migration helpers
 ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS progress_pct INTEGER DEFAULT 0 CHECK (progress_pct BETWEEN 0 AND 100);
 ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS parent_task_id UUID REFERENCES gantt_tasks(id) ON DELETE CASCADE;
-ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS budget_link TEXT;
+ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS budget_section TEXT;
+ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS is_chapter BOOLEAN DEFAULT false;
+ALTER TABLE gantt_tasks ADD COLUMN IF NOT EXISTS budget_row_id UUID REFERENCES budget_rows(id) ON DELETE SET NULL;
 
 -- =============================================================================
 -- INDEXES

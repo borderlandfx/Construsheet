@@ -962,6 +962,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   const [tasks, setTasks] = useState<GanttTask[]>(
     [...initialTasks].sort((a, b) => a.sort_order - b.sort_order)
   );
+  const [loading, setLoading]           = useState(initialTasks.length === 0);
   const [showAdd, setShowAdd]           = useState(false);
   const [editingTask, setEditingTask]   = useState<GanttTask | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -969,6 +970,25 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   const [movingId, setMovingId]         = useState<string | null>(null);
   const [zoomStep, setZoomStep]         = useState(0);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+
+  // ── Load on mount ───────────────────────────────────────────────────────────
+  // Pure read — the DB trigger on budget_rows creates gantt_tasks automatically.
+  // This effect only fetches what exists. No client-side creation.
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const { data } = await supabase
+        .from("gantt_tasks")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("sort_order");
+      if (cancelled) return;
+      setTasks(((data ?? []) as GanttTask[]).sort((a, b) => a.sort_order - b.sort_order));
+      setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleCollapse(id: string) {
     setCollapsedIds((prev) => {
@@ -1091,125 +1111,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
 
   useEffect(() => { onCountChange?.(tasks.length); }, [tasks.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── One-time sync: create missing gantt tasks from existing budget data ──────
-  useEffect(() => {
-    let cancelled = false;
-    async function syncFromBudget() {
-      // Load all budget rows for this project
-      const { data: budgetRows } = await supabase
-        .from("budget_rows")
-        .select("id, section, description, status")
-        .eq("project_id", projectId);
-      if (cancelled || !budgetRows || budgetRows.length === 0) return;
-
-      // Load existing gantt tasks with budget_link
-      const { data: existingTasks } = await supabase
-        .from("gantt_tasks")
-        .select("id, budget_link, parent_task_id, start_week, duration_weeks, sort_order, color")
-        .eq("project_id", projectId);
-      const existingLinks = new Set((existingTasks ?? []).map((t) => t.budget_link).filter(Boolean));
-
-      // Find unique sections that need chapter tasks
-      const sections = Array.from(new Set((budgetRows as BudgetRow[]).map((r) => r.section)));
-      let created = false;
-
-      for (const sec of sections) {
-        const chapterLink = `chapter:${sec}`;
-        if (existingLinks.has(chapterLink)) continue;
-
-        // Find next start_week and sort_order
-        const { data: lastTasks } = await supabase
-          .from("gantt_tasks")
-          .select("start_week, duration_weeks, sort_order")
-          .eq("project_id", projectId)
-          .is("parent_task_id", null)
-          .order("sort_order", { ascending: false })
-          .limit(1);
-        const last = lastTasks?.[0];
-        const startWeek = last ? (last.start_week + last.duration_weeks) : 1;
-        const sortOrder = last ? (last.sort_order + 1) : 0;
-        const colorIdx = sortOrder % BAR_COLORS.length;
-
-        const { data: chapterTask } = await supabase.from("gantt_tasks").insert({
-          project_id: projectId,
-          name: sec,
-          start_week: startWeek,
-          duration_weeks: 2,
-          color: BAR_COLORS[colorIdx],
-          status: "pending" as const,
-          progress_pct: 0,
-          budget_link: chapterLink,
-          sort_order: sortOrder,
-        }).select().single();
-        if (!chapterTask) continue;
-        existingLinks.add(chapterLink);
-        created = true;
-
-        // Create child tasks for rows in this section
-        const secRows = (budgetRows as BudgetRow[]).filter((r) => r.section === sec);
-        for (let i = 0; i < secRows.length; i++) {
-          const row = secRows[i];
-          const rowLink = `row:${row.id}`;
-          if (existingLinks.has(rowLink)) continue;
-          const ganttStatus = row.status === "approved" ? "complete" : row.status === "review" ? "in-progress" : "pending";
-          const progress = row.status === "approved" ? 100 : row.status === "review" ? 50 : 0;
-          await supabase.from("gantt_tasks").insert({
-            project_id: projectId,
-            name: row.description,
-            start_week: startWeek,
-            duration_weeks: 1,
-            color: BAR_COLORS[colorIdx],
-            status: ganttStatus as "complete" | "in-progress" | "pending",
-            progress_pct: progress,
-            parent_task_id: (chapterTask as GanttTask).id,
-            budget_link: rowLink,
-            sort_order: i,
-          });
-          existingLinks.add(rowLink);
-          created = true;
-        }
-      }
-
-      // Also create child tasks for rows whose chapters already exist
-      for (const row of budgetRows as BudgetRow[]) {
-        const rowLink = `row:${row.id}`;
-        if (existingLinks.has(rowLink)) continue;
-        const chapterLink = `chapter:${row.section}`;
-        const parentTask = (existingTasks ?? []).find((t) => t.budget_link === chapterLink);
-        if (!parentTask) continue;
-        const ganttStatus = row.status === "approved" ? "complete" : row.status === "review" ? "in-progress" : "pending";
-        const progress = row.status === "approved" ? 100 : row.status === "review" ? 50 : 0;
-        await supabase.from("gantt_tasks").insert({
-          project_id: projectId,
-          name: row.description,
-          start_week: parentTask.start_week,
-          duration_weeks: 1,
-          color: parentTask.color,
-          status: ganttStatus as "complete" | "in-progress" | "pending",
-          progress_pct: progress,
-          parent_task_id: parentTask.id,
-          budget_link: rowLink,
-          sort_order: 0,
-        });
-        created = true;
-      }
-
-      // Reload tasks if we created any
-      if (created && !cancelled) {
-        const { data: fresh } = await supabase
-          .from("gantt_tasks")
-          .select("*")
-          .eq("project_id", projectId)
-          .order("sort_order");
-        if (fresh && !cancelled) {
-          setTasks((fresh as GanttTask[]).sort((a, b) => a.sort_order - b.sort_order));
-        }
-      }
-    }
-    syncFromBudget();
-    return () => { cancelled = true; };
-  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // ── DnD sensors ──────────────────────────────────────────────────────────────
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -1219,19 +1120,61 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    const oldIdx = tasks.findIndex((t) => t.id === active.id);
-    const newIdx = tasks.findIndex((t) => t.id === over.id);
-    const reordered = arrayMove(tasks, oldIdx, newIdx);
-    setTasks(reordered);
-    // Persist in bulk
-    await Promise.all(
-      reordered.map((task, i) =>
-        supabase
-          .from("gantt_tasks")
-          .update({ sort_order: i })
-          .eq("id", task.id)
-      )
-    );
+
+    const activeTask = tasks.find((t) => t.id === active.id);
+    const overTask = tasks.find((t) => t.id === over.id);
+    if (!activeTask || !overTask) return;
+
+    // ── Chapter reorder: both are chapters (or top-level) ──────────────
+    if (!activeTask.parent_task_id && !overTask.parent_task_id) {
+      const chapters = tasks.filter((t) => !t.parent_task_id).sort((a, b) => a.sort_order - b.sort_order);
+      const oldIdx = chapters.findIndex((t) => t.id === active.id);
+      const newIdx = chapters.findIndex((t) => t.id === over.id);
+      if (oldIdx === -1 || newIdx === -1) return;
+      const reordered = arrayMove(chapters, oldIdx, newIdx);
+      // Update sort_order for chapters, rebuild full task list
+      const updated = tasks.map((t) => {
+        if (!t.parent_task_id) {
+          const idx = reordered.findIndex((c) => c.id === t.id);
+          return idx >= 0 ? { ...t, sort_order: idx } : t;
+        }
+        return t;
+      });
+      setTasks(updated);
+      await Promise.all(
+        reordered.map((ch, i) =>
+          supabase.from("gantt_tasks").update({ sort_order: i }).eq("id", ch.id)
+        )
+      );
+      return;
+    }
+
+    // ── Child reorder within the same parent ───────────────────────────
+    if (activeTask.parent_task_id && activeTask.parent_task_id === overTask.parent_task_id) {
+      const siblings = tasks
+        .filter((t) => t.parent_task_id === activeTask.parent_task_id)
+        .sort((a, b) => a.sort_order - b.sort_order);
+      const oldIdx = siblings.findIndex((t) => t.id === active.id);
+      const newIdx = siblings.findIndex((t) => t.id === over.id);
+      if (oldIdx === -1 || newIdx === -1) return;
+      const reordered = arrayMove(siblings, oldIdx, newIdx);
+      const updated = tasks.map((t) => {
+        if (t.parent_task_id === activeTask.parent_task_id) {
+          const idx = reordered.findIndex((s) => s.id === t.id);
+          return idx >= 0 ? { ...t, sort_order: idx } : t;
+        }
+        return t;
+      });
+      setTasks(updated);
+      await Promise.all(
+        reordered.map((s, i) =>
+          supabase.from("gantt_tasks").update({ sort_order: i }).eq("id", s.id)
+        )
+      );
+      return;
+    }
+
+    // Different parents or mixed parent/child — ignore
   }
 
   // ── Progress cycle (0 → 25 → 50 → 75 → 100 → 0) ─────────────────────────────
@@ -1714,8 +1657,21 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         </div>
       </div>
 
+      {/* ── Loading state ───────────────────────────────────── */}
+      {loading && tasks.length === 0 && (
+        <div
+          className="flex flex-col items-center justify-center py-16 rounded-[10px] text-center gap-3"
+          style={{ border: `1.5px dashed ${CS.border}` }}
+        >
+          <Loader2 className="h-6 w-6 animate-spin" style={{ color: CS.accent }} />
+          <p className="text-sm font-dm-sans" style={{ color: CS.muted }}>
+            {lang === "es" ? "Cargando cronograma…" : "Loading schedule…"}
+          </p>
+        </div>
+      )}
+
       {/* ── Empty state ────────────────────────────────────── */}
-      {tasks.length === 0 && (
+      {!loading && tasks.length === 0 && (
         <div
           className="flex flex-col items-center justify-center py-16 rounded-[10px] text-center gap-3"
           style={{ border: `1.5px dashed ${CS.border}` }}
@@ -1843,7 +1799,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
               strategy={verticalListSortingStrategy}
             >
               {visibleTasks.map((task) => {
-                const isParent = !task.parent_task_id && tasks.some((t) => t.parent_task_id === task.id);
+                const isParent = task.is_chapter || (!task.parent_task_id && tasks.some((t) => t.parent_task_id === task.id));
                 const isChild = !!task.parent_task_id;
                 const childCount = isParent ? tasks.filter((t) => t.parent_task_id === task.id).length : 0;
                 return (

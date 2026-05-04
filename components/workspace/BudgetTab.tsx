@@ -26,7 +26,6 @@ import { useToast } from "@/lib/context/ToastContext";
 import { t } from "@/lib/utils/i18n";
 import type {
   BudgetRow, BudgetRowInsert, BudgetRowUpdate, ApuItem, ApuLineItem,
-  GanttTaskInsert,
 } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 import { calcCostsDetailed, type EditorDraft } from "@/components/workspace/APUTab";
@@ -1422,9 +1421,9 @@ function SortableBudgetRow({
   );
 }
 
-// ─── Budget → Gantt sync helpers ──────────────────────────────────────────────
-
-const GANTT_PALETTE = ["#f97316","#14b8a6","#3b82f6","#8b5cf6","#fbbf24","#22c55e"];
+// ─── Budget → Gantt status sync (DB trigger handles task creation) ────────────
+// The DB trigger on budget_rows automatically creates gantt_tasks.
+// This helper only syncs status changes to existing gantt tasks.
 
 const BUDGET_TO_GANTT_STATUS: Record<string, "complete" | "in-progress" | "pending"> = {
   pending: "pending",
@@ -1432,129 +1431,21 @@ const BUDGET_TO_GANTT_STATUS: Record<string, "complete" | "in-progress" | "pendi
   approved: "complete",
 };
 
-/**
- * Ensure a gantt chapter-task exists for the given budget section.
- * Returns the gantt task id (existing or newly created).
- */
-async function ensureGanttChapter(
-  supabase: ReturnType<typeof createClient>,
-  projectId: string,
-  sectionName: string,
-): Promise<string | null> {
-  const budgetLink = `chapter:${sectionName}`;
-  // Check if already exists
-  const { data: existing } = await supabase
-    .from("gantt_tasks")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("budget_link", budgetLink)
-    .limit(1);
-  if (existing && existing.length > 0) return existing[0].id;
-
-  // Find next available start_week and sort_order
-  const { data: tasks } = await supabase
-    .from("gantt_tasks")
-    .select("start_week, duration_weeks, sort_order")
-    .eq("project_id", projectId)
-    .is("parent_task_id", null)
-    .order("sort_order", { ascending: false })
-    .limit(1);
-  const last = tasks?.[0];
-  const startWeek = last ? (last.start_week + last.duration_weeks) : 1;
-  const sortOrder = last ? (last.sort_order + 1) : 0;
-  const colorIdx = sortOrder % GANTT_PALETTE.length;
-
-  const payload: GanttTaskInsert = {
-    project_id: projectId,
-    name: sectionName,
-    start_week: startWeek,
-    duration_weeks: 2,
-    color: GANTT_PALETTE[colorIdx],
-    status: "pending",
-    progress_pct: 0,
-    budget_link: budgetLink,
-    sort_order: sortOrder,
-  };
-  const { data } = await supabase.from("gantt_tasks").insert(payload).select("id").single();
-  return data?.id ?? null;
-}
-
-/**
- * Ensure a gantt child-task exists for a budget row under its chapter task.
- */
-async function ensureGanttRow(
-  supabase: ReturnType<typeof createClient>,
-  projectId: string,
-  budgetRow: { id: string; description: string; section: string; status: string },
-): Promise<void> {
-  const budgetLink = `row:${budgetRow.id}`;
-  // Check if already exists
-  const { data: existing } = await supabase
-    .from("gantt_tasks")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("budget_link", budgetLink)
-    .limit(1);
-  if (existing && existing.length > 0) return;
-
-  // Get or create parent chapter task
-  const parentId = await ensureGanttChapter(supabase, projectId, budgetRow.section);
-
-  // Get parent's start_week for child
-  let parentStartWeek = 1;
-  if (parentId) {
-    const { data: parent } = await supabase
-      .from("gantt_tasks").select("start_week").eq("id", parentId).single();
-    if (parent) parentStartWeek = parent.start_week;
-  }
-
-  // Sort order: count existing children
-  const { count } = await supabase
-    .from("gantt_tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", projectId)
-    .eq("parent_task_id", parentId ?? "");
-  const childOrder = (count ?? 0);
-
-  // Get parent color
-  let color = GANTT_PALETTE[0];
-  if (parentId) {
-    const { data: p } = await supabase.from("gantt_tasks").select("color, sort_order").eq("id", parentId).single();
-    if (p) color = p.color;
-  }
-
-  const payload: GanttTaskInsert = {
-    project_id: projectId,
-    name: budgetRow.description,
-    start_week: parentStartWeek,
-    duration_weeks: 1,
-    color,
-    status: BUDGET_TO_GANTT_STATUS[budgetRow.status] ?? "pending",
-    progress_pct: budgetRow.status === "approved" ? 100 : budgetRow.status === "review" ? 50 : 0,
-    parent_task_id: parentId,
-    budget_link: budgetLink,
-    sort_order: childOrder,
-  };
-  await supabase.from("gantt_tasks").insert(payload);
-}
-
-/**
- * Sync a budget row's status change to its linked gantt task.
- */
 async function syncGanttStatus(
   supabase: ReturnType<typeof createClient>,
   projectId: string,
-  budgetRowId: string,
+  budgetRow: { description: string; section: string },
   newStatus: string,
 ): Promise<void> {
   const ganttStatus = BUDGET_TO_GANTT_STATUS[newStatus];
   if (!ganttStatus) return;
-  const progress = newStatus === "approved" ? 100 : newStatus === "review" ? 50 : 0;
   await supabase
     .from("gantt_tasks")
-    .update({ status: ganttStatus, progress_pct: progress })
+    .update({ status: ganttStatus })
     .eq("project_id", projectId)
-    .eq("budget_link", `row:${budgetRowId}`);
+    .eq("name", budgetRow.description)
+    .eq("budget_section", budgetRow.section)
+    .eq("is_chapter", false);
 }
 
 // ─── Main BudgetTab ───────────────────────────────────────────────────────────
@@ -1742,12 +1633,16 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
         }
         setRows(allUpdated);
 
-        // Batch persist
-        await Promise.all(
-          allUpdated.map((r) =>
+        // Batch persist budget rows + mirror sort to gantt chapters
+        await Promise.all([
+          ...allUpdated.map((r) =>
             supabase.from("budget_rows").update({ sort_order: r.sort_order }).eq("id", r.id)
-          )
-        );
+          ),
+          ...newOrder.map((sec, i) =>
+            supabase.from("gantt_tasks").update({ sort_order: i })
+              .eq("project_id", projectId).eq("budget_section", sec).eq("is_chapter", true)
+          ),
+        ]);
         return;
       }
 
@@ -1810,10 +1705,11 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
       await supabase.from("budget_rows").update(patch).eq("id", rowId);
       // Sync status to gantt
       if (field === "status") {
-        syncGanttStatus(supabase, projectId, rowId, rawVal);
+        const row = rows.find((r) => r.id === rowId);
+        if (row) syncGanttStatus(supabase, projectId, { description: row.description, section: row.section }, rawVal);
       }
     },
-    [supabase, projectId]
+    [supabase, projectId, rows]
   );
 
   // ── Row delete ────────────────────────────────────────────────────────────
@@ -1888,7 +1784,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
     setRows((prev) => prev.map((r) => ids.includes(r.id) ? { ...r, status: "approved" as const } : r));
     await supabase.from("budget_rows").update({ status: "approved" }).in("id", ids);
     // Sync all statuses to gantt
-    for (const id of ids) syncGanttStatus(supabase, projectId, id, "approved");
+    for (const row of toApprove) syncGanttStatus(supabase, projectId, { description: row.description, section: row.section }, "approved");
     toast(
       lang === "es"
         ? `${toApprove.length} partida${toApprove.length > 1 ? "s" : ""} aprobada${toApprove.length > 1 ? "s" : ""}`
@@ -1945,9 +1841,9 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
       sort_order: rows.length, status: "pending",
     };
     const { data } = await supabase.from("budget_rows").insert(payload).select().single();
-    if (data) setRows((prev) => [...prev, data as BudgetRow]);
-    // Sync: create gantt chapter task
-    ensureGanttChapter(supabase, projectId, trimmedName);
+    if (data) {
+      setRows((prev) => [...prev, data as BudgetRow]);
+    }
     setNewGroupModal(false);
     setNewGroupName("");
     setContextMenu(null);
@@ -2014,8 +1910,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
       const updated = [...prev, ...newRows];
       return updated;
     });
-    // Sync to gantt
-    for (const row of newRows) ensureGanttRow(supabase, projectId, row);
+    // DB trigger on budget_rows creates gantt tasks automatically
     toast(
       lang === "es"
         ? `${newRows.length} partida${newRows.length !== 1 ? "s" : ""} importada${newRows.length !== 1 ? "s" : ""}`
@@ -2647,7 +2542,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
           rowCount={rows.length}
           onSaved={(newRows) => {
             setRows((prev) => [...prev, ...newRows]);
-            for (const row of newRows) ensureGanttRow(supabase, projectId, row);
+            // DB trigger creates gantt tasks
           }}
           onClose={() => setAddActivitiesSection(null)}
           onCreateNew={() => { setAddActivitiesSection(null); setActiveTab("apu"); }}
@@ -2663,7 +2558,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
           prefill={addPrefill ?? undefined}
           onSaved={(row) => {
             setRows((p) => [...p, row]);
-            ensureGanttRow(supabase, projectId, row);
+            // DB trigger creates gantt task
           }}
           onClose={() => { setShowAdd(false); setAddPrefill(null); }}
         />
@@ -2688,7 +2583,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
           rowCount={rows.length}
           onSaved={(row) => {
             setRows((p) => [...p, row]);
-            ensureGanttRow(supabase, projectId, row);
+            // DB trigger creates gantt task
           }}
           onClose={() => setShowImport(false)}
         />
