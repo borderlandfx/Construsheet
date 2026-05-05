@@ -3,6 +3,9 @@ const nextConfig = {
   // Strict mode catches subtle React bugs during development
   reactStrictMode: true,
 
+  // Transpile ESM-only packages for compatibility
+  transpilePackages: ["@react-pdf/renderer"],
+
   // Allow Next.js Image to serve files from Supabase Storage
   images: {
     remotePatterns: [

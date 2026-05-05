@@ -1,53 +1,153 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Download, Link2, FileText, Loader2, RefreshCw } from "lucide-react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import {
+  Download,
+  Link2,
+  Loader2,
+  RefreshCw,
+  DollarSign,
+  TrendingUp,
+  Calendar,
+  Activity,
+} from "lucide-react";
+import {
+  PieChart,
+  Pie,
+  Cell,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  CartesianGrid,
+  Area,
+  AreaChart,
+} from "recharts";
+import Papa from "papaparse";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { useToast } from "@/lib/context/ToastContext";
-import type { BudgetRow, ApuItem, GanttTask, TakeoffItem, ApuLineItem } from "@/lib/types/database.types";
+import type { BudgetRow, ApuItem, GanttTask, TakeoffItem } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
-const CS = {
-  surface: "var(--cs-surface)",
-  border:  "var(--cs-border)",
-  accent:  "var(--cs-accent)",
-  text:    "var(--cs-text)",
-  muted:   "var(--cs-muted)",
-  bg:      "var(--cs-bg)",
-} as const;
+const COLORS = [
+  "#f97316", "#3b82f6", "#22c55e", "#a855f7", "#ec4899",
+  "#14b8a6", "#eab308", "#6366f1", "#ef4444", "#06b6d4",
+];
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 
-function StatCard({
+function KPICard({
+  icon: Icon,
   label,
   value,
   sub,
+  trend,
   accent,
 }: {
+  icon: React.ElementType;
   label: string;
   value: string;
   sub?: string;
-  accent?: boolean;
+  trend?: { value: number; label: string };
+  accent?: string;
+}) {
+  const accentColor = accent ?? "#f97316";
+  return (
+    <div className="relative overflow-hidden rounded-xl border border-[var(--cs-border)] bg-[var(--cs-surface)] p-5 transition-all hover:border-orange-500/30 hover:shadow-lg hover:shadow-orange-500/5">
+      {/* Gradient glow */}
+      <div
+        className="absolute -right-4 -top-4 h-24 w-24 rounded-full opacity-10 blur-2xl"
+        style={{ background: accentColor }}
+      />
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-1">
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--cs-muted)]">
+            {label}
+          </p>
+          <p className="text-2xl font-bold text-[var(--cs-text)]">{value}</p>
+          {sub && (
+            <p className="text-xs text-[var(--cs-muted)]">{sub}</p>
+          )}
+        </div>
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-lg"
+          style={{ background: `${accentColor}15` }}
+        >
+          <Icon className="h-5 w-5" style={{ color: accentColor }} />
+        </div>
+      </div>
+      {trend && (
+        <div className="mt-3 flex items-center gap-1.5">
+          <span
+            className="text-xs font-semibold"
+            style={{ color: trend.value >= 0 ? "#22c55e" : "#ef4444" }}
+          >
+            {trend.value >= 0 ? "↑" : "↓"} {Math.abs(trend.value).toFixed(1)}%
+          </span>
+          <span className="text-xs text-[var(--cs-muted)]">{trend.label}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Chart Card wrapper ───────────────────────────────────────────────────────
+
+function ChartCard({
+  title,
+  subtitle,
+  children,
+  className = "",
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
     <div
-      className="flex flex-col gap-1 rounded-[10px] p-4"
-      style={{
-        border: `1px solid ${accent ? "rgba(249,115,22,0.3)" : CS.border}`,
-        background: accent ? "rgba(249,115,22,0.05)" : "rgba(255,255,255,0.02)",
-      }}
+      className={`rounded-xl border border-[var(--cs-border)] bg-[var(--cs-surface)] p-5 ${className}`}
     >
-      <p className="text-xs font-dm-sans" style={{ color: CS.muted }}>{label}</p>
-      <p
-        className="font-syne font-bold text-2xl"
-        style={{ color: accent ? CS.accent : CS.text }}
-      >
-        {value}
-      </p>
-      {sub && <p className="text-xs font-dm-sans" style={{ color: CS.muted }}>{sub}</p>}
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-[var(--cs-text)]">{title}</h3>
+        {subtitle && (
+          <p className="mt-0.5 text-xs text-[var(--cs-muted)]">{subtitle}</p>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CustomTooltip({ active, payload, label, formatter }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-[var(--cs-border)] bg-[var(--cs-surface)] p-3 shadow-xl">
+      {label && (
+        <p className="mb-1.5 text-xs font-medium text-[var(--cs-muted)]">{label}</p>
+      )}
+      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+      {payload.map((entry: any, i: number) => (
+        <div key={i} className="flex items-center gap-2">
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ background: entry.color }}
+          />
+          <span className="text-xs text-[var(--cs-muted)]">{entry.name}:</span>
+          <span className="text-xs font-semibold text-[var(--cs-text)]">
+            {formatter ? formatter(entry.value) : entry.value}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -55,28 +155,31 @@ function StatCard({
 // ─── ReportsTab ───────────────────────────────────────────────────────────────
 
 export default function ReportsTab() {
-  const supabase = createClient();
+  const supabaseRef = useRef(createClient());
   const { projectId, language, fmt } = useWorkspace();
   const { toast } = useToast();
   const lang = language as Locale;
 
-  const [loading, setLoading]         = useState(true);
-  const [refreshKey, setRefreshKey]   = useState(0);
-  const [budgetRows, setBudgetRows]   = useState<BudgetRow[]>([]);
-  const [apuItems, setApuItems]       = useState<ApuItem[]>([]);
-  const [ganttTasks, setGanttTasks]   = useState<GanttTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
+  const [apuItems, setApuItems] = useState<ApuItem[]>([]);
+  const [ganttTasks, setGanttTasks] = useState<GanttTask[]>([]);
   const [takeoffItems, setTakeoffItems] = useState<TakeoffItem[]>([]);
 
   // ── Fetch all project data ─────────────────────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     async function loadData() {
       setLoading(true);
+      const supabase = supabaseRef.current;
       const [br, ai, gt, to] = await Promise.all([
         supabase.from("budget_rows").select("*").eq("project_id", projectId).order("sort_order"),
         supabase.from("apu_items").select("*").eq("project_id", projectId).order("created_at"),
         supabase.from("gantt_tasks").select("*").eq("project_id", projectId).order("sort_order"),
         supabase.from("takeoff_items").select("*").eq("project_id", projectId).order("sort_order"),
       ]);
+      if (cancelled) return;
       setBudgetRows((br.data as BudgetRow[]) ?? []);
       setApuItems((ai.data as ApuItem[]) ?? []);
       setGanttTasks((gt.data as GanttTask[]) ?? []);
@@ -84,102 +187,237 @@ export default function ReportsTab() {
       setLoading(false);
     }
     loadData();
-  }, [projectId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { cancelled = true; };
+  }, [projectId, refreshKey]);
 
-  const budgetTotal    = budgetRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
-  const apuTotal       = apuItems.reduce((s, i) => s + i.selling_price, 0);
-  const sections       = Array.from(new Set(budgetRows.map((r) => r.section)));
+  // ── Derived data ───────────────────────────────────────────────────────────
+
+  const budgetTotal = useMemo(
+    () => budgetRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0),
+    [budgetRows]
+  );
+
+  const sections = useMemo(
+    () => Array.from(new Set(budgetRows.map((r) => r.section))),
+    [budgetRows]
+  );
+
   const completedTasks = ganttTasks.filter((t) => t.status === "complete").length;
-  const totalQty       = takeoffItems.reduce((s, i) => s + i.quantity, 0);
+  const avgProgress = ganttTasks.length > 0
+    ? Math.round(ganttTasks.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / ganttTasks.length)
+    : 0;
 
-  // APU cost composition (materials / labor / equipment direct subtotals)
-  const apuComposition = apuItems.reduce(
-    (acc, item) => {
-      const sumArr = (arr: ApuLineItem[]) => arr.reduce((t, r) => t + r.qty * r.unit_price, 0);
-      return {
-        mat: acc.mat + sumArr((item.materials as ApuLineItem[]) ?? []),
-        lab: acc.lab + sumArr((item.labor     as ApuLineItem[]) ?? []),
-        eqp: acc.eqp + sumArr((item.equipment as ApuLineItem[]) ?? []),
-      };
-    },
-    { mat: 0, lab: 0, eqp: 0 }
+  // Total project duration in weeks
+  const totalWeeks = useMemo(() => {
+    if (ganttTasks.length === 0) return 0;
+    return Math.max(...ganttTasks.map((t) => (t.start_week ?? 1) + (t.duration_weeks ?? 1)));
+  }, [ganttTasks]);
+
+  // Executed spend (approved rows)
+  const executedSpend = useMemo(
+    () => budgetRows
+      .filter((r) => r.status === "approved")
+      .reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0),
+    [budgetRows]
   );
-  const apuDirect = apuComposition.mat + apuComposition.lab + apuComposition.eqp;
-  const apuHasComposition = apuDirect > 0;
 
-  // Group takeoff items by unit for a compact unit summary
-  const takeoffByUnit = takeoffItems.reduce<Map<string, { total: number; count: number }>>(
-    (map, item) => {
-      const u = (item.unit ?? "").trim() || (lang === "es" ? "(sin unidad)" : "(no unit)");
-      const prev = map.get(u) ?? { total: 0, count: 0 };
-      map.set(u, { total: prev.total + item.quantity, count: prev.count + 1 });
-      return map;
-    },
-    new Map()
-  );
-  const takeoffUnitRows = Array.from(takeoffByUnit.entries()).sort((a, b) => b[1].total - a[1].total);
+  // ── Chart data: Donut (cost distribution by section) ───────────────────────
 
-  // ── CSV export helpers ────────────────────────────────────────────────────
-  function downloadCSV(rows: (string | number)[][], filename: string) {
-    const csv = rows
-      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-      .join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const donutData = useMemo(() => {
+    return sections.map((sec, i) => {
+      const secRows = budgetRows.filter((r) => r.section === sec);
+      const secTotal = secRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
+      return { name: sec, value: secTotal, color: COLORS[i % COLORS.length] };
+    });
+  }, [sections, budgetRows]);
+
+  // ── Chart data: Monthly progress vs budget bar chart ───────────────────────
+
+  const barChartData = useMemo(() => {
+    if (ganttTasks.length === 0 && budgetRows.length === 0) return [];
+
+    // Group by week ranges (every 4 weeks = ~1 month)
+    const maxWeek = totalWeeks || 12;
+    const months: { name: string; presupuesto: number; avance: number }[] = [];
+
+    for (let w = 1; w <= maxWeek; w += 4) {
+      const weekEnd = Math.min(w + 3, maxWeek);
+      const monthLabel = lang === "es" ? `Mes ${Math.ceil(w / 4)}` : `Month ${Math.ceil(w / 4)}`;
+
+      // Budget for tasks active in this period
+      const tasksInPeriod = ganttTasks.filter((t) => {
+        const start = t.start_week ?? 1;
+        const end = start + (t.duration_weeks ?? 1) - 1;
+        return start <= weekEnd && end >= w;
+      });
+
+      // Get budget from linked sections
+      const linkedSections = new Set(tasksInPeriod.map((t) => t.budget_section).filter(Boolean));
+      const periodBudget = linkedSections.size > 0
+        ? budgetRows
+            .filter((r) => linkedSections.has(r.section))
+            .reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0) / Math.ceil((weekEnd - w + 1) / 4)
+        : 0;
+
+      // Progress: weighted average of tasks in period
+      const periodProgress = tasksInPeriod.length > 0
+        ? tasksInPeriod.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / tasksInPeriod.length
+        : 0;
+
+      // Approximate executed value based on progress
+      const executed = periodBudget * (periodProgress / 100);
+
+      months.push({
+        name: monthLabel,
+        presupuesto: Math.round(periodBudget),
+        avance: Math.round(executed),
+      });
+    }
+
+    return months;
+  }, [ganttTasks, budgetRows, totalWeeks, lang]);
+
+  // ── Chart data: S-Curve (cumulative planned vs executed) ───────────────────
+
+  const sCurveData = useMemo(() => {
+    if (ganttTasks.length === 0) return [];
+
+    const maxWeek = totalWeeks || 12;
+    const points: { week: number; planificado: number; ejecutado: number }[] = [];
+    let cumulativePlanned = 0;
+    let cumulativeExecuted = 0;
+
+    for (let w = 1; w <= maxWeek; w++) {
+      // Tasks that should be contributing in this week
+      const activeTasks = ganttTasks.filter((t) => {
+        const start = t.start_week ?? 1;
+        const end = start + (t.duration_weeks ?? 1) - 1;
+        return start <= w && end >= w;
+      });
+
+      // Planned: distribute budget evenly across task duration
+      activeTasks.forEach((task) => {
+        const linkedRows = budgetRows.filter(
+          (r) => r.section === task.budget_section
+        );
+        const taskBudget = linkedRows.reduce(
+          (s, r) => s + (r.total ?? r.quantity * r.unit_price),
+          0
+        );
+        const weeklyPlanned = taskBudget / (task.duration_weeks ?? 1);
+        cumulativePlanned += weeklyPlanned / activeTasks.length;
+
+        // Executed: based on actual progress
+        const weeklyExecuted = weeklyPlanned * ((task.progress_pct ?? 0) / 100);
+        cumulativeExecuted += weeklyExecuted / activeTasks.length;
+      });
+
+      if (w % 2 === 0 || w === 1 || w === maxWeek) {
+        points.push({
+          week: w,
+          planificado: Math.round(cumulativePlanned),
+          ejecutado: Math.round(cumulativeExecuted),
+        });
+      }
+    }
+
+    return points;
+  }, [ganttTasks, budgetRows, totalWeeks]);
+
+  // ── CSV export (papaparse) ──────────────────────────────────────────────────
 
   function handleBudgetCSV() {
-    const headers = [
-      lang === "es" ? "Sección" : "Section",
-      lang === "es" ? "Código" : "Code",
-      lang === "es" ? "Descripción" : "Description",
-      lang === "es" ? "Unidad" : "Unit",
-      lang === "es" ? "Cantidad" : "Quantity",
-      lang === "es" ? "Precio Unit." : "Unit Price",
-      lang === "es" ? "Total" : "Total",
-      lang === "es" ? "Estatus" : "Status",
-      lang === "es" ? "Responsable" : "Assignee",
-    ];
-    const rows = budgetRows.map((r) => [
-      r.section,
-      r.code ?? "",
-      r.description,
-      r.unit ?? "",
-      r.quantity,
-      r.unit_price,
-      r.total ?? r.quantity * r.unit_price,
-      r.status,
-      r.assignee ?? "",
-    ]);
-    downloadCSV([headers, ...rows], `budget-${Date.now()}.csv`);
+    const data = budgetRows.map((r) => ({
+      [lang === "es" ? "Sección" : "Section"]: r.section,
+      [lang === "es" ? "Código" : "Code"]: r.code ?? "",
+      [lang === "es" ? "Descripción" : "Description"]: r.description,
+      [lang === "es" ? "Unidad" : "Unit"]: r.unit ?? "",
+      [lang === "es" ? "Cantidad" : "Quantity"]: r.quantity,
+      [lang === "es" ? "Precio Unit." : "Unit Price"]: r.unit_price,
+      Total: r.total ?? r.quantity * r.unit_price,
+      [lang === "es" ? "Estatus" : "Status"]: r.status,
+      [lang === "es" ? "Responsable" : "Assignee"]: r.assignee ?? "",
+    }));
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `presupuesto-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
 
   function handleApuCSV() {
-    const headers = [
-      lang === "es" ? "Código" : "Code",
-      lang === "es" ? "Descripción" : "Description",
-      lang === "es" ? "Unidad" : "Unit",
-      lang === "es" ? "Costo Directo" : "Direct Cost",
-      lang === "es" ? "GG %" : "OH %",
-      lang === "es" ? "Utilidad %" : "Profit %",
-      lang === "es" ? "Precio Venta" : "Selling Price",
-    ];
-    const rows = apuItems.map((item) => [
-      item.code,
-      item.description,
-      item.unit,
-      item.direct_cost.toFixed(2),
-      item.overhead_pct.toFixed(2),
-      item.profit_pct.toFixed(2),
-      item.selling_price.toFixed(2),
-    ]);
-    downloadCSV([headers, ...rows], `apu-${Date.now()}.csv`);
+    const data = apuItems.map((item) => ({
+      [lang === "es" ? "Código" : "Code"]: item.code,
+      [lang === "es" ? "Descripción" : "Description"]: item.description,
+      [lang === "es" ? "Unidad" : "Unit"]: item.unit,
+      [lang === "es" ? "Costo Directo" : "Direct Cost"]: item.direct_cost.toFixed(2),
+      [lang === "es" ? "GG %" : "OH %"]: item.overhead_pct.toFixed(2),
+      [lang === "es" ? "Utilidad %" : "Profit %"]: item.profit_pct.toFixed(2),
+      [lang === "es" ? "Precio Venta" : "Selling Price"]: item.selling_price.toFixed(2),
+    }));
+    const csv = Papa.unparse(data);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `apu-${Date.now()}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   }
+
+  // ── PDF on-demand generation (avoids render-loop from PDFDownloadLink) ──────
+
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+
+  const handlePDFDownload = useCallback(async () => {
+    setPdfGenerating(true);
+    try {
+      const { pdf } = await import("@react-pdf/renderer");
+      const { default: ReportsPDFComponent } = await import("./ReportsPDF");
+
+      const pdfSections = sections.map((sec) => ({
+        name: sec,
+        total: fmt(
+          budgetRows
+            .filter((r) => r.section === sec)
+            .reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0)
+        ),
+      }));
+
+      const pdfTasks = ganttTasks.slice(0, 15).map((t) => ({
+        id: t.id,
+        name: t.name,
+        progress_pct: t.progress_pct,
+      }));
+
+      const blob = await pdf(
+        <ReportsPDFComponent
+          lang={lang}
+          budgetTotal={fmt(budgetTotal)}
+          avgProgress={avgProgress}
+          executedSpend={fmt(executedSpend)}
+          totalWeeks={totalWeeks}
+          sections={pdfSections}
+          budgetTotalFormatted={fmt(budgetTotal)}
+          ganttTasks={pdfTasks}
+        />
+      ).toBlob();
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `reporte-proyecto-${Date.now()}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      toast(lang === "es" ? "Error al generar PDF" : "PDF generation failed", "error");
+    } finally {
+      setPdfGenerating(false);
+    }
+  }, [sections, budgetRows, ganttTasks, budgetTotal, executedSpend, avgProgress, totalWeeks, lang, fmt, toast]);
+
 
   // ── Share (copy URL) ──────────────────────────────────────────────────────
   async function handleShare() {
@@ -197,226 +435,30 @@ export default function ReportsTab() {
     }
   }
 
-  // ── PDF print ─────────────────────────────────────────────────────────────
-  function handlePDF() {
-    const win = window.open("", "_blank", "width=960,height=720,menubar=yes");
-    if (!win) return;
-
-    const statusLabel = (s: string) =>
-      lang === "es"
-        ? ({ approved: "Aprobado", review: "En revisión", pending: "Pendiente" }[s] ?? s)
-        : ({ approved: "Approved", review: "Under Review", pending: "Pending" }[s] ?? s);
-
-    let rowNum = 0;
-    const budgetHtml = sections.map((sec) => {
-      const secRows = budgetRows.filter((r) => r.section === sec);
-      const secTotal = secRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
-      const dataRows = secRows.map((row) => {
-        rowNum++;
-        const total = row.total ?? row.quantity * row.unit_price;
-        return `<tr>
-          <td style="text-align:center;color:#6b7280">${rowNum}</td>
-          <td><code style="color:#f97316;font-size:10px">${row.code ?? ""}</code></td>
-          <td>${row.description}</td>
-          <td style="text-align:center;color:#6b7280">${row.unit ?? ""}</td>
-          <td style="text-align:right">${row.quantity.toLocaleString()}</td>
-          <td style="text-align:right">${fmt(row.unit_price)}</td>
-          <td style="text-align:right;font-weight:600">${fmt(total)}</td>
-          <td style="text-align:center;font-size:10px">${statusLabel(row.status)}</td>
-        </tr>`;
-      }).join("");
-      return `<tr style="background:#fff7ed">
-        <td colspan="8" style="padding:6px 8px;font-weight:700;font-size:10px;text-transform:uppercase;color:#c2410c;border-top:2px solid #fed7aa">
-          <span>${sec}</span><span style="float:right">${fmt(secTotal)}</span>
-        </td>
-      </tr>${dataRows}`;
-    }).join("");
-
-    const html = `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="UTF-8"/>
-  <title>${lang === "es" ? "Reporte del Proyecto" : "Project Report"} — ConstruSheet</title>
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:system-ui,-apple-system,sans-serif;font-size:11px;color:#111827;padding:24px}
-    h1{font-size:20px;font-weight:700;margin-bottom:2px}
-    h2{font-size:13px;font-weight:700;margin:16px 0 8px;color:#f97316;text-transform:uppercase;letter-spacing:.05em}
-    .meta{font-size:10px;color:#6b7280;margin-bottom:12px}
-    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
-    .stat{border:1px solid #e5e7eb;border-radius:8px;padding:10px}
-    .stat-label{font-size:10px;color:#6b7280}
-    .stat-value{font-size:18px;font-weight:700;color:#111827}
-    .stat-value.accent{color:#f97316}
-    table{width:100%;border-collapse:collapse;font-size:10.5px}
-    th{background:#f97316;color:#fff;padding:5px 7px;text-align:left;font-size:9.5px;font-weight:600;text-transform:uppercase}
-    th:nth-child(5),th:nth-child(6),th:nth-child(7){text-align:right}
-    th:nth-child(4),th:nth-child(8){text-align:center}
-    td{padding:4px 7px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
-    tr:nth-child(even) td{background:#f9fafb}
-    .total-row td{background:#fff7ed!important;font-weight:700;border-top:2px solid #fed7aa}
-    .footer{margin-top:16px;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between}
-    @media print{body{padding:12px}.footer{position:fixed;bottom:0;left:24px;right:24px}}
-  </style>
-</head>
-<body>
-  <h1>ConstruSheet — ${lang === "es" ? "Reporte del Proyecto" : "Project Report"}</h1>
-  <div class="meta">${lang === "es" ? "Generado" : "Generated"}: ${new Date().toLocaleDateString(lang === "es" ? "es-MX" : "en-US", { year: "numeric", month: "long", day: "numeric" })}</div>
-
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-label">${lang === "es" ? "Presupuesto Total" : "Budget Total"}</div>
-      <div class="stat-value accent">${fmt(budgetTotal)}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">${lang === "es" ? "Partidas" : "Budget Rows"}</div>
-      <div class="stat-value">${budgetRows.length}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">${lang === "es" ? "APUs" : "APU Items"}</div>
-      <div class="stat-value">${apuItems.length}</div>
-    </div>
-    <div class="stat">
-      <div class="stat-label">${lang === "es" ? "Tareas completadas" : "Tasks completed"}</div>
-      <div class="stat-value">${completedTasks} / ${ganttTasks.length}</div>
-    </div>
-  </div>
-
-  ${budgetRows.length > 0 ? `
-  <h2>${lang === "es" ? "Presupuesto de Obra" : "Construction Budget"}</h2>
-  <table>
-    <thead>
-      <tr>
-        <th style="width:28px">#</th>
-        <th style="width:60px">${lang === "es" ? "Código" : "Code"}</th>
-        <th>${lang === "es" ? "Descripción" : "Description"}</th>
-        <th style="width:45px">${lang === "es" ? "Unid." : "Unit"}</th>
-        <th style="width:60px">${lang === "es" ? "Cant." : "Qty"}</th>
-        <th style="width:80px">${lang === "es" ? "P.U." : "Unit Price"}</th>
-        <th style="width:80px">${lang === "es" ? "Total" : "Total"}</th>
-        <th style="width:75px">${lang === "es" ? "Estatus" : "Status"}</th>
-      </tr>
-    </thead>
-    <tbody>${budgetHtml}</tbody>
-    <tfoot>
-      <tr class="total-row">
-        <td colspan="6" style="text-align:right;font-size:10px;color:#92400e;text-transform:uppercase">
-          ${lang === "es" ? "Total del Presupuesto" : "Budget Total"}
-        </td>
-        <td style="text-align:right;font-size:13px;color:#f97316">${fmt(budgetTotal)}</td>
-        <td></td>
-      </tr>
-    </tfoot>
-  </table>` : ""}
-
-  ${apuItems.length > 0 ? (() => {
-    const apuRows = apuItems.map((item, i) => `<tr>
-      <td style="text-align:center;color:#6b7280">${i + 1}</td>
-      <td><code style="font-family:monospace;color:#f97316;font-size:10px">${item.code}</code></td>
-      <td>${item.description}</td>
-      <td style="text-align:center;color:#6b7280">${item.unit}</td>
-      <td style="text-align:right">${fmt(item.direct_cost)}</td>
-      <td style="text-align:right;color:#6b7280">${item.overhead_pct}% + ${item.profit_pct}%</td>
-      <td style="text-align:right;font-weight:600;color:#f97316">${fmt(item.selling_price)}</td>
-    </tr>`).join("");
-    return `<h2 style="margin-top:20px">${lang === "es" ? "Análisis de Precio Unitario (APU)" : "Unit Price Analysis (APU)"}</h2>
-    <table>
-      <thead><tr>
-        <th style="width:28px">#</th>
-        <th style="width:70px">${lang === "es" ? "Código" : "Code"}</th>
-        <th>${lang === "es" ? "Descripción" : "Description"}</th>
-        <th style="width:50px;text-align:center">${lang === "es" ? "Unid." : "Unit"}</th>
-        <th style="width:85px;text-align:right">${lang === "es" ? "Costo Dir." : "Direct Cost"}</th>
-        <th style="width:90px;text-align:right">${lang === "es" ? "GI% + Util%" : "OH% + Profit%"}</th>
-        <th style="width:85px;text-align:right">${lang === "es" ? "Precio Unit." : "Unit Price"}</th>
-      </tr></thead>
-      <tbody>${apuRows}</tbody>
-      <tfoot><tr class="total-row">
-        <td colspan="6" style="text-align:right;font-size:10px;color:#92400e;text-transform:uppercase">${lang === "es" ? "Total P.V." : "Total Selling"}</td>
-        <td style="text-align:right;font-size:13px;color:#f97316">${fmt(apuItems.reduce((s, i) => s + i.selling_price, 0))}</td>
-      </tr></tfoot>
-    </table>`;
-  })() : ""}
-
-  ${ganttTasks.length > 0 ? (() => {
-    const taskRows = ganttTasks.map((task, i) => {
-      const statusLbl = lang === "es"
-        ? ({ complete: "Completo", "in-progress": "En curso", pending: "Pendiente" }[task.status] ?? task.status)
-        : ({ complete: "Complete", "in-progress": "In progress", pending: "Pending" }[task.status] ?? task.status);
-      const pct = task.progress_pct ?? 0;
-      const bar = `<div style="background:#e5e7eb;border-radius:4px;height:5px;width:60px;display:inline-block;vertical-align:middle"><div style="background:${task.color ?? "#f97316"};height:5px;border-radius:4px;width:${pct}%"></div></div> ${pct}%`;
-      return `<tr>
-        <td style="text-align:center;color:#6b7280">${i + 1}</td>
-        <td style="font-weight:500">${task.name}</td>
-        <td style="color:#6b7280">${task.assignee ?? "—"}</td>
-        <td style="text-align:center">${task.start_week}</td>
-        <td style="text-align:center">${task.duration_weeks}w</td>
-        <td>${bar}</td>
-        <td style="text-align:center;font-size:10px;color:#6b7280">${statusLbl}</td>
-      </tr>`;
-    }).join("");
-    const avgPct = Math.round(ganttTasks.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / ganttTasks.length);
-    return `<h2 style="margin-top:20px">${lang === "es" ? "Cronograma de Obra" : "Project Schedule"}</h2>
-    <table>
-      <thead><tr>
-        <th style="width:28px">#</th>
-        <th>${lang === "es" ? "Tarea" : "Task"}</th>
-        <th style="width:90px">${lang === "es" ? "Responsable" : "Assignee"}</th>
-        <th style="width:55px;text-align:center">${lang === "es" ? "S. inicio" : "Start wk"}</th>
-        <th style="width:55px;text-align:center">${lang === "es" ? "Duración" : "Duration"}</th>
-        <th style="width:110px">${lang === "es" ? "Avance" : "Progress"}</th>
-        <th style="width:80px;text-align:center">${lang === "es" ? "Estatus" : "Status"}</th>
-      </tr></thead>
-      <tbody>${taskRows}</tbody>
-      <tfoot><tr class="total-row">
-        <td colspan="5" style="text-align:right;font-size:10px;color:#92400e;text-transform:uppercase">${lang === "es" ? "Avance promedio" : "Avg. progress"}</td>
-        <td style="font-size:13px;font-weight:700;color:#f97316">${avgPct}%</td>
-        <td></td>
-      </tr></tfoot>
-    </table>`;
-  })() : ""}
-
-  ${takeoffItems.length > 0 ? (() => {
-    const toRows = takeoffItems.map((item, i) => `<tr>
-      <td style="text-align:center;color:#6b7280">${i + 1}</td>
-      <td style="font-weight:500">${item.element}</td>
-      <td style="color:#6b7280">${item.description ?? ""}</td>
-      <td style="text-align:center;color:#6b7280">${item.unit ?? ""}</td>
-      <td style="text-align:right;font-weight:600">${item.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })}</td>
-      <td style="color:#6b7280;font-size:10px">${item.notes ?? ""}</td>
-    </tr>`).join("");
-    return `<h2 style="margin-top:20px">${lang === "es" ? "Cubicación / Generadores de Cantidad" : "Quantity Takeoff"}</h2>
-    <table>
-      <thead><tr>
-        <th style="width:28px">#</th>
-        <th style="width:130px">${lang === "es" ? "Elemento" : "Element"}</th>
-        <th>${lang === "es" ? "Descripción" : "Description"}</th>
-        <th style="width:50px;text-align:center">${lang === "es" ? "Unid." : "Unit"}</th>
-        <th style="width:80px;text-align:right">${lang === "es" ? "Cantidad" : "Quantity"}</th>
-        <th style="width:110px">${lang === "es" ? "Notas" : "Notes"}</th>
-      </tr></thead>
-      <tbody>${toRows}</tbody>
-      <tfoot><tr class="total-row">
-        <td colspan="4" style="text-align:right;font-size:10px;color:#92400e;text-transform:uppercase">${lang === "es" ? "Cant. total" : "Total qty"}</td>
-        <td style="text-align:right;font-size:13px;color:#f97316">${takeoffItems.reduce((s, i) => s + i.quantity, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-        <td></td>
-      </tr></tfoot>
-    </table>`;
-  })() : ""}
-
-  <div class="footer"><span>ConstruSheet</span><span>${new Date().toISOString().slice(0, 10)}</span></div>
-  <script>setTimeout(()=>{window.print();},400)<\/script>
-</body>
-</html>`;
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-  }
+  // ── Loading ─────────────────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin" style={{ color: CS.muted }} />
+        <Loader2 className="h-6 w-6 animate-spin text-[var(--cs-muted)]" />
+      </div>
+    );
+  }
+
+  // ── Empty state ─────────────────────────────────────────────────────────────
+
+  if (budgetRows.length === 0 && apuItems.length === 0 && ganttTasks.length === 0 && takeoffItems.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 rounded-xl border-2 border-dashed border-[var(--cs-border)] text-center gap-3">
+        <Activity className="h-10 w-10 text-[var(--cs-muted)] opacity-50" />
+        <p className="text-base font-semibold text-[var(--cs-text)]">
+          {lang === "es" ? "Sin datos para reportar" : "No data to report yet"}
+        </p>
+        <p className="text-sm text-[var(--cs-muted)] max-w-sm">
+          {lang === "es"
+            ? "Agrega partidas, APUs o tareas en las pestañas correspondientes para ver el dashboard aquí."
+            : "Add budget rows, APUs, or tasks in their respective tabs to see the dashboard here."}
+        </p>
       </div>
     );
   }
@@ -426,422 +468,410 @@ export default function ReportsTab() {
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
-            {lang === "es" ? "Reportes del Proyecto" : "Project Reports"}
+          <h2 className="text-lg font-bold text-[var(--cs-text)]">
+            {lang === "es" ? "Dashboard del Proyecto" : "Project Dashboard"}
           </h2>
-          <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
-            {lang === "es" ? "Resumen y exportaciones" : "Summary and exports"}
+          <p className="text-xs text-[var(--cs-muted)] mt-0.5">
+            {lang === "es" ? "Métricas y análisis en tiempo real" : "Real-time metrics & analytics"}
           </p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Refresh */}
           <button
             type="button"
             onClick={() => setRefreshKey((k) => k + 1)}
-            disabled={loading}
-            title={lang === "es" ? "Actualizar datos" : "Refresh data"}
-            className="flex items-center justify-center rounded-[10px]"
-            style={{
-              width: 36, height: 36,
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.5 : 1,
-            }}
-            onMouseEnter={(e) => { if (!loading) (e.currentTarget as HTMLButtonElement).style.color = CS.text; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = CS.muted; }}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[var(--cs-border)] text-[var(--cs-muted)] hover:text-[var(--cs-text)] hover:border-orange-500/30 transition-colors"
+            title={lang === "es" ? "Actualizar" : "Refresh"}
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} aria-hidden="true" />
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </button>
 
-          {/* Share */}
           <button
             type="button"
             onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--cs-border)] px-3 py-2 text-sm text-[var(--cs-muted)] hover:text-[var(--cs-text)] hover:border-orange-500/30 transition-colors"
           >
-            <Link2 className="h-4 w-4" aria-hidden="true" />
+            <Link2 className="h-4 w-4" />
             {lang === "es" ? "Compartir" : "Share"}
           </button>
 
-          {/* Budget CSV */}
           <button
             type="button"
             onClick={handleBudgetCSV}
             disabled={budgetRows.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--cs-border)] px-3 py-2 text-sm text-[var(--cs-muted)] hover:text-[var(--cs-text)] hover:border-orange-500/30 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             title={lang === "es" ? "Exportar presupuesto CSV" : "Export budget CSV"}
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: budgetRows.length === 0 ? CS.muted : CS.text,
-              cursor: budgetRows.length === 0 ? "not-allowed" : "pointer",
-              opacity: budgetRows.length === 0 ? 0.45 : 1,
-            }}
           >
-            <Download className="h-4 w-4" aria-hidden="true" />
+            <Download className="h-4 w-4" />
             {lang === "es" ? "Ppto." : "Budget"}
           </button>
 
-          {/* APU CSV */}
           <button
             type="button"
             onClick={handleApuCSV}
             disabled={apuItems.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            title={lang === "es" ? "Exportar APUs CSV" : "Export APU CSV"}
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: apuItems.length === 0 ? CS.muted : CS.text,
-              cursor: apuItems.length === 0 ? "not-allowed" : "pointer",
-              opacity: apuItems.length === 0 ? 0.45 : 1,
-            }}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--cs-border)] px-3 py-2 text-sm text-[var(--cs-muted)] hover:text-[var(--cs-text)] hover:border-orange-500/30 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            title={lang === "es" ? "Exportar APU CSV" : "Export APU CSV"}
           >
-            <Download className="h-4 w-4" aria-hidden="true" />
+            <Download className="h-4 w-4" />
             APU
           </button>
 
-          {/* PDF */}
+          {/* PDF Export — on-demand generation to avoid re-render loops */}
           <button
             type="button"
-            onClick={handlePDF}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
+            onClick={handlePDFDownload}
+            disabled={pdfGenerating}
+            className="flex items-center gap-1.5 rounded-lg bg-[var(--cs-accent)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
           >
-            <FileText className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "Reporte PDF" : "PDF Report"}
+            <Download className="h-4 w-4" />
+            {pdfGenerating
+              ? (lang === "es" ? "Generando..." : "Generating...")
+              : "PDF"
+            }
           </button>
         </div>
       </div>
 
-      {/* ── Summary stats ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard
-          label={lang === "es" ? "Total presupuesto" : "Budget total"}
+      {/* ── KPI Cards ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KPICard
+          icon={DollarSign}
+          label={lang === "es" ? "Total Presupuesto" : "Total Budget"}
           value={fmt(budgetTotal)}
-          sub={`${budgetRows.length} ${lang === "es" ? "partidas" : "rows"}`}
-          accent
+          sub={`${budgetRows.length} ${lang === "es" ? "partidas" : "line items"}`}
+          accent="#f97316"
         />
-        <StatCard
-          label={lang === "es" ? "Secciones" : "Sections"}
-          value={String(sections.length)}
-          sub={lang === "es" ? "en el presupuesto" : "in budget"}
+        <KPICard
+          icon={Activity}
+          label={lang === "es" ? "Avance Físico" : "Physical Progress"}
+          value={`${avgProgress}%`}
+          sub={`${completedTasks}/${ganttTasks.length} ${lang === "es" ? "tareas completas" : "tasks complete"}`}
+          trend={avgProgress > 0 ? { value: avgProgress, label: lang === "es" ? "promedio" : "average" } : undefined}
+          accent="#22c55e"
         />
-        <StatCard
-          label={lang === "es" ? "Análisis APU" : "APU analyses"}
-          value={String(apuItems.length)}
-          sub={`${lang === "es" ? "Total P.V." : "Total S.P."}: ${fmt(apuTotal)}`}
+        <KPICard
+          icon={TrendingUp}
+          label={lang === "es" ? "Gasto Ejecutado" : "Executed Spend"}
+          value={fmt(executedSpend)}
+          sub={budgetTotal > 0
+            ? `${((executedSpend / budgetTotal) * 100).toFixed(1)}% ${lang === "es" ? "del presupuesto" : "of budget"}`
+            : undefined
+          }
+          accent="#3b82f6"
         />
-        <StatCard
-          label={lang === "es" ? "Avance cronograma" : "Schedule progress"}
-          value={ganttTasks.length > 0 ? `${Math.round((completedTasks / ganttTasks.length) * 100)}%` : "—"}
-          sub={`${completedTasks} / ${ganttTasks.length} ${lang === "es" ? "completas" : "complete"}`}
+        <KPICard
+          icon={Calendar}
+          label={lang === "es" ? "Duración del Proyecto" : "Project Duration"}
+          value={totalWeeks > 0 ? `${totalWeeks} ${lang === "es" ? "sem." : "wks"}` : "—"}
+          sub={totalWeeks > 0
+            ? `≈ ${Math.ceil(totalWeeks / 4)} ${lang === "es" ? "meses" : "months"}`
+            : lang === "es" ? "Sin cronograma" : "No schedule"
+          }
+          accent="#a855f7"
         />
-        {takeoffItems.length > 0 && (
-          <StatCard
-            label={lang === "es" ? "Cubicación" : "Takeoff"}
-            value={String(takeoffItems.length)}
-            sub={`${lang === "es" ? "Cant. total" : "Total qty"}: ${totalQty.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-          />
+      </div>
+
+      {/* ── Charts row ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Donut: Cost distribution by section */}
+        {donutData.length > 0 && (
+          <ChartCard
+            title={lang === "es" ? "Distribución de Costos por Capítulo" : "Cost Distribution by Chapter"}
+            subtitle={lang === "es" ? "Proporción del presupuesto por sección" : "Budget proportion by section"}
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-[220px] w-[220px] flex-shrink-0">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={donutData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={90}
+                      paddingAngle={2}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {donutData.map((entry, idx) => (
+                        <Cell key={idx} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={<CustomTooltip formatter={fmt} />}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-col gap-2 overflow-auto max-h-[220px] flex-1">
+                {donutData.map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-sm flex-shrink-0"
+                      style={{ background: entry.color }}
+                    />
+                    <span className="text-xs text-[var(--cs-text)] truncate flex-1">
+                      {entry.name}
+                    </span>
+                    <span className="text-xs font-medium text-[var(--cs-muted)] flex-shrink-0">
+                      {budgetTotal > 0 ? `${((entry.value / budgetTotal) * 100).toFixed(0)}%` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ChartCard>
+        )}
+
+        {/* Bar: Monthly progress vs budget */}
+        {barChartData.length > 0 && (
+          <ChartCard
+            title={lang === "es" ? "Avance vs Presupuesto Mensual" : "Monthly Progress vs Budget"}
+            subtitle={lang === "es" ? "Comparación de ejecución planificada" : "Planned execution comparison"}
+          >
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barChartData} barGap={4}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--cs-border)" opacity={0.5} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: "var(--cs-muted)", fontSize: 11 }}
+                    axisLine={{ stroke: "var(--cs-border)" }}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fill: "var(--cs-muted)", fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                  />
+                  <Tooltip content={<CustomTooltip formatter={fmt} />} />
+                  <Legend
+                    wrapperStyle={{ fontSize: 11 }}
+                    iconType="circle"
+                    iconSize={8}
+                  />
+                  <Bar
+                    dataKey="presupuesto"
+                    name={lang === "es" ? "Presupuesto" : "Budget"}
+                    fill="#3b82f6"
+                    radius={[4, 4, 0, 0]}
+                    opacity={0.8}
+                  />
+                  <Bar
+                    dataKey="avance"
+                    name={lang === "es" ? "Ejecutado" : "Executed"}
+                    fill="#22c55e"
+                    radius={[4, 4, 0, 0]}
+                    opacity={0.8}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </ChartCard>
         )}
       </div>
 
-      {/* ── Budget by section ────────────────────────────────── */}
-      {sections.length > 0 && (
-        <div
-          className="rounded-[10px] overflow-hidden"
-          style={{ border: `1px solid ${CS.border}` }}
+      {/* ── S-Curve ────────────────────────────────────────────── */}
+      {sCurveData.length > 0 && (
+        <ChartCard
+          title={lang === "es" ? "Curva S — Costo Acumulado" : "S-Curve — Cumulative Cost"}
+          subtitle={lang === "es"
+            ? "Planificado vs ejecutado a lo largo del proyecto"
+            : "Planned vs executed over project timeline"
+          }
         >
-          <div
-            className="px-4 py-3"
-            style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-          >
-            <span className="font-syne font-bold text-sm" style={{ color: CS.text }}>
-              {lang === "es" ? "Presupuesto por sección" : "Budget by section"}
-            </span>
+          <div className="h-[280px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={sCurveData}>
+                <defs>
+                  <linearGradient id="gradPlanned" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradExecuted" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--cs-border)" opacity={0.5} />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fill: "var(--cs-muted)", fontSize: 11 }}
+                  axisLine={{ stroke: "var(--cs-border)" }}
+                  tickLine={false}
+                  label={{
+                    value: lang === "es" ? "Semana" : "Week",
+                    position: "insideBottom",
+                    offset: -5,
+                    style: { fill: "var(--cs-muted)", fontSize: 11 },
+                  }}
+                />
+                <YAxis
+                  tick={{ fill: "var(--cs-muted)", fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
+                />
+                <Tooltip content={<CustomTooltip formatter={fmt} />} />
+                <Legend
+                  wrapperStyle={{ fontSize: 11 }}
+                  iconType="circle"
+                  iconSize={8}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="planificado"
+                  name={lang === "es" ? "Planificado" : "Planned"}
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  fill="url(#gradPlanned)"
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 2 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="ejecutado"
+                  name={lang === "es" ? "Ejecutado" : "Executed"}
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  fill="url(#gradExecuted)"
+                  dot={false}
+                  activeDot={{ r: 4, strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-          {sections.map((sec) => {
-            const secRows = budgetRows.filter((r) => r.section === sec);
-            const secTotal = secRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
-            const pct = budgetTotal > 0 ? (secTotal / budgetTotal) * 100 : 0;
-            return (
-              <div
-                key={sec}
-                className="flex items-center gap-4 px-4 py-3"
-                style={{ borderBottom: `1px solid ${CS.border}` }}
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-dm-sans font-medium truncate" style={{ color: CS.text }}>{sec}</p>
-                  <div
-                    className="mt-1.5 rounded-full overflow-hidden"
-                    style={{ height: 4, background: CS.border }}
-                  >
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${pct}%`, background: CS.accent, transition: "width 0.3s ease" }}
-                    />
+        </ChartCard>
+      )}
+
+      {/* ── Sections breakdown table ──────────────────────────── */}
+      {sections.length > 0 && (
+        <ChartCard
+          title={lang === "es" ? "Desglose por Capítulo" : "Breakdown by Chapter"}
+          subtitle={lang === "es" ? "Detalle de costos por sección" : "Cost detail per section"}
+        >
+          <div className="divide-y divide-[var(--cs-border)]">
+            {sections.map((sec, i) => {
+              const secRows = budgetRows.filter((r) => r.section === sec);
+              const secTotal = secRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
+              const pct = budgetTotal > 0 ? (secTotal / budgetTotal) * 100 : 0;
+              // Task progress for this section
+              const sectionTasks = ganttTasks.filter((t) => t.budget_section === sec);
+              const sectionProgress = sectionTasks.length > 0
+                ? Math.round(sectionTasks.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / sectionTasks.length)
+                : null;
+
+              return (
+                <div key={sec} className="flex items-center gap-4 py-3">
+                  <span
+                    className="h-3 w-3 rounded-sm flex-shrink-0"
+                    style={{ background: COLORS[i % COLORS.length] }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-sm font-medium text-[var(--cs-text)] truncate">{sec}</p>
+                      <p className="text-sm font-semibold text-[var(--cs-text)] flex-shrink-0 ml-3">
+                        {fmt(secTotal)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-1.5 rounded-full bg-[var(--cs-border)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${pct}%`,
+                            background: COLORS[i % COLORS.length],
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs text-[var(--cs-muted)] w-10 text-right">
+                        {pct.toFixed(0)}%
+                      </span>
+                      {sectionProgress !== null && (
+                        <span className="text-xs font-medium text-emerald-500 w-12 text-right">
+                          ▶ {sectionProgress}%
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-semibold font-dm-sans" style={{ color: CS.text }}>{fmt(secTotal)}</p>
-                  <p className="text-xs font-dm-sans" style={{ color: CS.muted }}>{pct.toFixed(1)}%</p>
-                </div>
-              </div>
-            );
-          })}
-          <div
-            className="flex items-center justify-between px-4 py-3"
-            style={{ background: "rgba(249,115,22,0.04)" }}
-          >
-            <span className="text-sm font-dm-sans font-medium" style={{ color: CS.muted }}>
-              {lang === "es" ? "Total" : "Total"}
+              );
+            })}
+          </div>
+
+          {/* Total footer */}
+          <div className="flex items-center justify-between pt-4 mt-4 border-t border-[var(--cs-border)]">
+            <span className="text-sm font-medium text-[var(--cs-muted)]">
+              {lang === "es" ? "Total del presupuesto" : "Budget total"}
             </span>
-            <span className="font-syne font-bold text-lg" style={{ color: CS.accent }}>
+            <span className="text-xl font-bold text-[var(--cs-accent)]">
               {fmt(budgetTotal)}
             </span>
           </div>
-        </div>
+        </ChartCard>
       )}
 
-      {/* ── APU cost composition ─────────────────────────────── */}
-      {apuItems.length > 0 && apuHasComposition && (
-        <div
-          className="rounded-[10px] overflow-hidden"
-          style={{ border: `1px solid ${CS.border}` }}
-        >
-          <div
-            className="px-4 py-3"
-            style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-          >
-            <span className="font-syne font-bold text-sm" style={{ color: CS.text }}>
-              {lang === "es" ? "Composición de costos directos (APU)" : "Direct cost composition (APU)"}
-            </span>
-          </div>
-
-          {/* Segmented bar */}
-          <div className="px-4 pt-4 pb-2">
-            <div className="flex rounded-full overflow-hidden" style={{ height: 10, gap: 2 }}>
-              {apuDirect > 0 && [
-                { val: apuComposition.mat, color: "#3b82f6" },
-                { val: apuComposition.lab, color: "#22c55e" },
-                { val: apuComposition.eqp, color: "#f97316" },
-              ].map(({ val, color }, idx) => {
-                const pct = (val / apuDirect) * 100;
-                return pct > 0 ? (
-                  <div
-                    key={idx}
-                    style={{
-                      width: `${pct}%`,
-                      background: color,
-                      borderRadius: 9999,
-                      transition: "width 0.4s ease",
-                    }}
-                  />
-                ) : null;
-              })}
-            </div>
-          </div>
-
-          {/* Row labels */}
-          {(
-            [
-              {
-                label: lang === "es" ? "Materiales"   : "Materials",
-                val: apuComposition.mat, color: "#3b82f6",
-              },
-              {
-                label: lang === "es" ? "Mano de obra" : "Labor",
-                val: apuComposition.lab, color: "#22c55e",
-              },
-              {
-                label: lang === "es" ? "Equipos"      : "Equipment",
-                val: apuComposition.eqp, color: "#f97316",
-              },
-            ] as { label: string; val: number; color: string }[]
-          ).map(({ label, val, color }) => {
-            const pct = apuDirect > 0 ? (val / apuDirect) * 100 : 0;
-            return (
-              <div
-                key={label}
-                className="flex items-center gap-4 px-4 py-2.5"
-                style={{ borderBottom: `1px solid ${CS.border}` }}
-              >
-                <span
-                  className="shrink-0 rounded-full"
-                  style={{ width: 8, height: 8, background: color, display: "inline-block" }}
-                />
-                <span className="flex-1 text-sm font-dm-sans" style={{ color: CS.text }}>{label}</span>
-                <span className="text-sm font-dm-sans" style={{ color: CS.muted }}>
-                  {pct.toFixed(1)}%
-                </span>
-                <span className="text-sm font-semibold font-dm-sans" style={{ color: CS.text }}>
-                  {fmt(val)}
-                </span>
-              </div>
-            );
-          })}
-
-          <div
-            className="flex items-center justify-between px-4 py-3"
-            style={{ background: "rgba(255,255,255,0.02)" }}
-          >
-            <span className="text-sm font-dm-sans font-medium" style={{ color: CS.muted }}>
-              {lang === "es" ? "Costo directo total APU" : "Total APU direct cost"}
-            </span>
-            <span className="font-syne font-bold text-lg" style={{ color: CS.accent }}>
-              {fmt(apuDirect)}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Gantt tasks breakdown ────────────────────────────── */}
+      {/* ── Schedule overview ─────────────────────────────────── */}
       {ganttTasks.length > 0 && (
-        <div
-          className="rounded-[10px] overflow-hidden"
-          style={{ border: `1px solid ${CS.border}` }}
+        <ChartCard
+          title={lang === "es" ? "Estado del Cronograma" : "Schedule Status"}
+          subtitle={`${completedTasks}/${ganttTasks.length} ${lang === "es" ? "tareas completadas" : "tasks completed"} · ${avgProgress}% ${lang === "es" ? "avance promedio" : "avg. progress"}`}
         >
-          <div
-            className="px-4 py-3"
-            style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-          >
-            <span className="font-syne font-bold text-sm" style={{ color: CS.text }}>
-              {lang === "es" ? "Avance del cronograma" : "Schedule progress"}
-            </span>
-          </div>
-          {ganttTasks.map((task) => {
-            const pct = task.progress_pct ?? 0;
-            const statusColors: Record<string, string> = {
-              complete: "#14b8a6",
-              "in-progress": "#f97316",
-              pending: "#6b7280",
-            };
-            const barColor = statusColors[task.status] ?? "#6b7280";
-            return (
-              <div
-                key={task.id}
-                className="flex items-center gap-4 px-4 py-3"
-                style={{ borderBottom: `1px solid ${CS.border}` }}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <p className="text-sm font-dm-sans font-medium truncate" style={{ color: CS.text }}>{task.name}</p>
-                    {task.assignee && (
-                      <span className="text-xs font-dm-sans shrink-0 hidden sm:block" style={{ color: CS.muted }}>
-                        · {task.assignee}
-                      </span>
-                    )}
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            {[
+              { status: "complete", label: lang === "es" ? "Completas" : "Complete", color: "#22c55e" },
+              { status: "in-progress", label: lang === "es" ? "En curso" : "In Progress", color: "#f97316" },
+              { status: "pending", label: lang === "es" ? "Pendientes" : "Pending", color: "#6b7280" },
+            ].map(({ status, label, color }) => {
+              const count = ganttTasks.filter((t) => t.status === status).length;
+              return (
+                <div key={status} className="flex items-center gap-2 rounded-lg border border-[var(--cs-border)] p-3">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />
+                  <div>
+                    <p className="text-lg font-bold text-[var(--cs-text)]">{count}</p>
+                    <p className="text-xs text-[var(--cs-muted)]">{label}</p>
                   </div>
-                  <div
-                    className="rounded-full overflow-hidden"
-                    style={{ height: 5, background: CS.border }}
-                  >
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Task progress bars (top 8) */}
+          <div className="space-y-2.5 max-h-[300px] overflow-auto">
+            {ganttTasks.slice(0, 8).map((task) => {
+              const pct = task.progress_pct ?? 0;
+              const barColor = task.status === "complete" ? "#22c55e"
+                : task.status === "in-progress" ? "#f97316"
+                : "#6b7280";
+              return (
+                <div key={task.id} className="flex items-center gap-3">
+                  <span className="text-xs text-[var(--cs-muted)] w-[140px] truncate flex-shrink-0">
+                    {task.name}
+                  </span>
+                  <div className="flex-1 h-2 rounded-full bg-[var(--cs-border)] overflow-hidden">
                     <div
-                      className="h-full rounded-full"
-                      style={{ width: `${pct}%`, background: barColor, transition: "width 0.3s ease" }}
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${pct}%`, background: barColor }}
                     />
                   </div>
-                </div>
-                <div className="text-right shrink-0" style={{ minWidth: 72 }}>
-                  <p className="text-sm font-semibold font-dm-sans" style={{ color: pct === 100 ? "#14b8a6" : CS.text }}>
+                  <span
+                    className="text-xs font-semibold w-10 text-right"
+                    style={{ color: pct === 100 ? "#22c55e" : "var(--cs-text)" }}
+                  >
                     {pct}%
-                  </p>
-                  <p className="text-xs font-dm-sans" style={{ color: CS.muted }}>
-                    {lang === "es"
-                      ? ({ complete: "Completo", "in-progress": "En curso", pending: "Pendiente" }[task.status] ?? task.status)
-                      : ({ complete: "Complete", "in-progress": "In progress", pending: "Pending" }[task.status] ?? task.status)}
-                  </p>
+                  </span>
                 </div>
-              </div>
-            );
-          })}
-          {/* Overall progress row */}
-          {ganttTasks.length > 0 && (
-            <div
-              className="flex items-center justify-between px-4 py-3"
-              style={{ background: "rgba(255,255,255,0.02)" }}
-            >
-              <span className="text-sm font-dm-sans font-medium" style={{ color: CS.muted }}>
-                {lang === "es" ? "Avance promedio" : "Avg. progress"}
-              </span>
-              <span className="font-syne font-bold text-lg" style={{ color: CS.accent }}>
-                {Math.round(ganttTasks.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / ganttTasks.length)}%
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Takeoff summary ──────────────────────────────────── */}
-      {takeoffItems.length > 0 && (
-        <div
-          className="rounded-[10px] overflow-hidden"
-          style={{ border: `1px solid ${CS.border}` }}
-        >
-          <div
-            className="px-4 py-3 flex items-center justify-between"
-            style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}
-          >
-            <span className="font-syne font-bold text-sm" style={{ color: CS.text }}>
-              {lang === "es" ? "Generadores de cantidad" : "Quantity takeoff"}
-            </span>
-            <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
-              {takeoffItems.length} {lang === "es" ? "elementos" : "elements"}
-            </span>
+              );
+            })}
+            {ganttTasks.length > 8 && (
+              <p className="text-xs text-[var(--cs-muted)] text-center pt-1">
+                +{ganttTasks.length - 8} {lang === "es" ? "tareas más" : "more tasks"}
+              </p>
+            )}
           </div>
-          {/* Unit summary rows */}
-          {takeoffUnitRows.map(([unit, { total, count }]) => (
-            <div
-              key={unit}
-              className="flex items-center gap-4 px-4 py-2.5"
-              style={{ borderBottom: `1px solid ${CS.border}` }}
-            >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-dm-sans font-medium" style={{ color: CS.text }}>{unit}</p>
-                <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
-                  {count} {lang === "es" ? "elemento(s)" : "element(s)"}
-                </p>
-              </div>
-              <span className="font-syne font-bold text-base shrink-0" style={{ color: CS.accent }}>
-                {total.toLocaleString(undefined, { maximumFractionDigits: 3 })}
-              </span>
-            </div>
-          ))}
-          <div
-            className="flex items-center justify-between px-4 py-3"
-            style={{ background: "rgba(249,115,22,0.03)" }}
-          >
-            <span className="text-sm font-dm-sans font-medium" style={{ color: CS.muted }}>
-              {lang === "es" ? "Cantidad total registrada" : "Total qty on record"}
-            </span>
-            <span className="font-syne font-bold text-lg" style={{ color: CS.accent }}>
-              {totalQty.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* ── Empty state ──────────────────────────────────────── */}
-      {budgetRows.length === 0 && apuItems.length === 0 && ganttTasks.length === 0 && takeoffItems.length === 0 && (
-        <div
-          className="flex flex-col items-center justify-center py-16 rounded-[10px] text-center gap-3"
-          style={{ border: `1.5px dashed ${CS.border}` }}
-        >
-          <p className="font-syne font-bold text-base" style={{ color: CS.text }}>
-            {lang === "es" ? "Sin datos para reportar" : "No data to report yet"}
-          </p>
-          <p className="text-sm font-dm-sans max-w-xs" style={{ color: CS.muted }}>
-            {lang === "es"
-              ? "Agrega partidas, APUs o tareas en las pestañas correspondientes para ver el resumen aquí."
-              : "Add budget rows, APUs, or tasks in their respective tabs to see a summary here."}
-          </p>
-        </div>
+        </ChartCard>
       )}
     </div>
   );

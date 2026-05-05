@@ -36,17 +36,22 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .eq("id", user.id)
     .single();
 
-  // Load workspace data in parallel
-  const [
-    { data: apuItems },
-    { data: budgetRows },
-    { data: ganttTasks },
-    { data: takeoffItems },
-  ] = await Promise.all([
-    supabase.from("apu_items").select("*").eq("project_id", id).order("created_at"),
-    supabase.from("budget_rows").select("*").eq("project_id", id).order("sort_order"),
-    supabase.from("gantt_tasks").select("*").eq("project_id", id).order("sort_order"),
-    supabase.from("takeoff_items").select("*").eq("project_id", id).order("sort_order"),
+  // Load workspace data in parallel — each query is individually safe so one
+  // table missing (e.g. takeoff_items not yet migrated) won't crash the page.
+  async function safeQuery<T>(promise: Promise<{ data: T | null; error: unknown }>) {
+    try {
+      const { data } = await promise;
+      return data;
+    } catch {
+      return null;
+    }
+  }
+
+  const [apuItems, budgetRows, ganttTasks, takeoffItems] = await Promise.all([
+    safeQuery(supabase.from("apu_items").select("*").eq("project_id", id).order("created_at")),
+    safeQuery(supabase.from("budget_rows").select("*").eq("project_id", id).order("sort_order")),
+    safeQuery(supabase.from("gantt_tasks").select("*").eq("project_id", id).order("sort_order")),
+    safeQuery(supabase.from("takeoff_items").select("*").eq("project_id", id).order("sort_order")),
   ]);
 
   const initialCurrency = (project.currency ?? profile?.currency_pref ?? "USD") as Currency;
