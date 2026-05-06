@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS apu_items (
 -- Migration: add category column to existing apu_items tables
 ALTER TABLE apu_items ADD COLUMN IF NOT EXISTS category TEXT;
 
+-- Migration: add is_library flag to apu_items
+ALTER TABLE apu_items ADD COLUMN IF NOT EXISTS is_library BOOLEAN DEFAULT false;
+
+-- Migration: add user_id to apu_items for user-global library
+ALTER TABLE apu_items ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES profiles(id);
+
 -- ---------------------------------------------------------------------------
 -- 4. BUDGET_ROWS
 -- ---------------------------------------------------------------------------

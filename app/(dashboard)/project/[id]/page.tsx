@@ -44,7 +44,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
       return data;
     } catch {
       return null;
-    }
+
   }
 
   const [apuItems, budgetRows, ganttTasks, takeoffItems] = await Promise.all([

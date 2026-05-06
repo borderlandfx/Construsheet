@@ -153,6 +153,8 @@ export interface Database {
           description: string;
           unit: string;
           category: string | null;
+          is_library: boolean;
+          user_id: string | null;
           materials: ApuLineItem[];
           labor: ApuLineItem[];
           equipment: ApuLineItem[];
@@ -170,6 +172,8 @@ export interface Database {
           description: string;
           unit: string;
           category?: string | null;
+          is_library?: boolean;
+          user_id?: string | null;
           materials?: ApuLineItem[];
           labor?: ApuLineItem[];
           equipment?: ApuLineItem[];
@@ -187,6 +191,8 @@ export interface Database {
           description?: string;
           unit?: string;
           category?: string | null;
+          is_library?: boolean;
+          user_id?: string | null;
           materials?: ApuLineItem[];
           labor?: ApuLineItem[];
           equipment?: ApuLineItem[];

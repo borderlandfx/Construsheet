@@ -1045,10 +1045,11 @@ function printAPU(item: ApuItem, settings: ProjectIndirectCosts, fmt: (n: number
 
 // ─── APU list row ─────────────────────────────────────────────────────────────
 
-function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit, onDelete, onDuplicate, onSendToBudget, onPrint }:
+function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit, onDelete, onDuplicate, onSendToBudget, onPrint, onToggleLibrary }:
   { item: ApuItem; language: Locale; fmt: (n: number) => string;
     selected: boolean; onSelect: () => void; onEdit: () => void; onDelete: () => void;
-    onDuplicate: () => void; onSendToBudget: () => void; onPrint: () => void; }
+    onDuplicate: () => void; onSendToBudget: () => void; onPrint: () => void;
+    onToggleLibrary: () => void; }
 ) {
   const [deleting, setDeleting] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -1139,6 +1140,18 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
             <ArrowRight className="h-3 w-3" />
             {_language === "es" ? "Presupuesto" : "Budget"}
           </button>
+          <label className="flex items-center gap-1.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+            <span className="text-[10px] font-dm-sans" style={{ color: CS.muted }}>Biblioteca</span>
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={item.is_library || false}
+                onChange={(e) => { e.stopPropagation(); onToggleLibrary(); }}
+                className="peer sr-only"
+              />
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-600" />
+            </div>
+          </label>
           <button type="button" onClick={handleTrashClick} disabled={deleting}
             className="flex items-center justify-center rounded-lg"
             style={{ width: 28, height: 28, background: "none", border: "1px solid transparent", cursor: "pointer", color: CS.muted }}
@@ -1186,7 +1199,7 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
 
 // ─── APU list view ────────────────────────────────────────────────────────────
 
-function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, onEdit, onDelete, onDuplicate, onSendToBudget, onPrint, onSearch, onAI, onLibrary }:
+function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, onEdit, onDelete, onDuplicate, onSendToBudget, onPrint, onSearch, onAI, onLibrary, onToggleLibrary }:
   { items: ApuItem[]; language: Locale; fmt: (n: number) => string;
     selectedId: string | null; search: string;
     onSelect: (id: string) => void; onNew: () => void;
@@ -1195,7 +1208,8 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
     onSendToBudget: (item: ApuItem) => void;
     onPrint: (item: ApuItem) => void;
     onSearch: (q: string) => void;
-    onAI: () => void; onLibrary: () => void }
+    onAI: () => void; onLibrary: () => void;
+    onToggleLibrary: (item: ApuItem) => void }
 ) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [sortBy, setSortBy] = useState<"code" | "description" | "unit" | "direct_cost" | "selling_price" | null>(null);
@@ -1592,7 +1606,8 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
                     onDelete={() => onDelete(item.id)}
                     onDuplicate={() => onDuplicate(item)}
                     onSendToBudget={() => onSendToBudget(item)}
-                    onPrint={() => onPrint(item)} />
+                    onPrint={() => onPrint(item)}
+                    onToggleLibrary={() => onToggleLibrary(item)} />
                 ))}
               </tbody>
             </table>
@@ -1910,7 +1925,7 @@ interface APUTabProps {
 }
 
 export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
-  const { projectId, language, currency, fmt, projectSettings, setActiveTab } = useWorkspace();
+  const { projectId, language, currency, fmt, projectSettings, setActiveTab, userId } = useWorkspace();
   const { toast } = useToast();
   const [items, setItems]   = useState<ApuItem[]>(initialItems);
   const [view, setView]     = useState<View>({ kind: "list" });
@@ -2095,6 +2110,21 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
     }
   }
 
+  async function handleToggleLibrary(item: ApuItem) {
+    const supabase = createClient();
+    const newVal = !item.is_library;
+    const { error } = await supabase.from("apu_items").update({ is_library: newVal, user_id: newVal ? userId : null }).eq("id", item.id);
+    if (!error) {
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_library: newVal } : i)));
+      toast(
+        newVal
+          ? (language === "es" ? "Agregado a biblioteca" : "Added to library")
+          : (language === "es" ? "Quitado de biblioteca" : "Removed from library"),
+        "success"
+      );
+    }
+  }
+
   function handleSendToBudget(item: ApuItem) {
     setSendItem(item);
   }
@@ -2151,6 +2181,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
           onSearch={setSearch}
           onAI={() => setShowAI(true)}
           onLibrary={() => setShowLibrary(true)}
+          onToggleLibrary={handleToggleLibrary}
         />
       )}
 

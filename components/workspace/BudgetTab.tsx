@@ -29,6 +29,7 @@ import type {
 } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 import { calcCostsDetailed, type EditorDraft } from "@/components/workspace/APUTab";
+import APULibraryModal from "@/components/workspace/APULibraryModal";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -1457,7 +1458,7 @@ interface BudgetTabProps {
 }
 
 export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCountChange }: BudgetTabProps) {
-  const { projectId, language, fmt, setActiveTab } = useWorkspace();
+  const { projectId, language, fmt, setActiveTab, userId } = useWorkspace();
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -1501,7 +1502,19 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
   const [showImport, setShowImport]   = useState(false);
   const [showLibrary, setShowLibrary] = useState(false);
   const [showPaste, setShowPaste]     = useState(false);
+  const [showAPULibrary, setShowAPULibrary] = useState(false);
   const [addPrefill, setAddPrefill]   = useState<{ name: string; unit: string; unit_price: number } | null>(null);
+
+  function refetchBudgetRows() {
+    supabase.from("budget_rows").select("*").eq("project_id", projectId).order("sort_order")
+      .then(({ data }) => {
+        if (!data) return;
+        const fresh = (data as BudgetRow[])
+          .filter((r) => !isGhostRow(r))
+          .map((r) => ({ ...r, section: r.section.trim() }));
+        setRows(fresh);
+      });
+  }
 
   // APU detail panel
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
@@ -2142,6 +2155,13 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
             <Import className="h-4 w-4" />
             {lang === "es" ? "Importar APU" : "Import APU"}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowAPULibrary(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            📚 Biblioteca de APUs
+          </button>
           <button type="button" onClick={() => setShowAdd(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
             style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
@@ -2289,6 +2309,10 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
             <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
               style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
               <Import className="h-4 w-4" />{lang === "es" ? "Importar APU" : "Import APU"}
+            </button>
+            <button onClick={() => setShowLibraryModal(true)}
+              className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg hover:bg-gray-50">
+              📚 {lang === "es" ? "Importar desde Biblioteca" : "Import from Library"}
             </button>
             <button onClick={() => setShowPaste(true)} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
               style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
@@ -2589,6 +2613,18 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
         />
       )}
 
+      {/* ── APU Library modal ──────────────────────────────── */}
+      <APULibraryModal
+        isOpen={showAPULibrary}
+        onClose={() => setShowAPULibrary(false)}
+        projectId={projectId}
+        budgetId={projectId}
+        userId={userId}
+        onSuccess={() => {
+          refetchBudgetRows();
+        }}
+      />
+
       {/* ── Library modal ───────────────────────────────────── */}
       {showLibrary && (
         <BudgetLibraryModal
@@ -2700,3 +2736,4 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
     </div>
   );
 }
+
