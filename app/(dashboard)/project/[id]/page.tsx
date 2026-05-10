@@ -36,19 +36,29 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .eq("id", user.id)
     .single();
 
-  // Load workspace data in parallel — each query is individually safe so one
-  // table missing (e.g. takeoff_items not yet migrated) won't crash the page.
+  // Safe query helper
   async function safeQuery<T>(promise: Promise<{ data: T | null; error: unknown }>) {
     try {
       const { data } = await promise;
       return data;
     } catch {
       return null;
-
+    }
   }
 
+  // Load workspace data — APU Library is now GLOBAL
   const [apuItems, budgetRows, ganttTasks, takeoffItems] = await Promise.all([
-    safeQuery(supabase.from("apu_items").select("*").eq("project_id", id).order("created_at")),
+    // GLOBAL APU LIBRARY (shared across all budgets)
+    safeQuery(
+      supabase
+        .from("apu_items")
+        .select("*")
+        .eq("is_library", true)
+        .eq("user_id", user.id)
+        .order("description", { ascending: true })
+    ),
+
+    // Project-specific data
     safeQuery(supabase.from("budget_rows").select("*").eq("project_id", id).order("sort_order")),
     safeQuery(supabase.from("gantt_tasks").select("*").eq("project_id", id).order("sort_order")),
     safeQuery(supabase.from("takeoff_items").select("*").eq("project_id", id).order("sort_order")),
@@ -56,7 +66,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   const initialCurrency = (project.currency ?? profile?.currency_pref ?? "USD") as Currency;
   const initialLanguage = (profile?.language ?? "es") as Locale;
-  // Project-level settings take precedence; fall back to user default
+
   const initialSettings = (
     (project.project_settings && Object.keys(project.project_settings as object).length > 0
       ? project.project_settings
