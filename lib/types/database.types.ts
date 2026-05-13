@@ -327,7 +327,6 @@ export interface Database {
           id: string;
           project_id: string;
           name: string;
-          assignee: string | null;
           start_week: number;
           duration_weeks: number;
           color: string;
@@ -344,7 +343,6 @@ export interface Database {
           id?: string;
           project_id: string;
           name: string;
-          assignee?: string | null;
           start_week?: number;
           duration_weeks?: number;
           color?: string;
@@ -361,7 +359,6 @@ export interface Database {
           id?: string;
           project_id?: string;
           name?: string;
-          assignee?: string | null;
           start_week?: number;
           duration_weeks?: number;
           color?: string;

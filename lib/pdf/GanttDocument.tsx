@@ -15,11 +15,10 @@ const C = PDF_COLORS;
 // A4 landscape usable width = 842 - 2×30 = 782 pt
 
 const TOTAL_WEEKS = 12;
-const COL_NAME     = 181;
-const COL_ASSIGNEE = 80;
+const COL_NAME     = 261;
 const COL_STATUS   = 65;
-const COL_WEEK     = Math.floor((782 - COL_NAME - COL_ASSIGNEE - COL_STATUS) / TOTAL_WEEKS); // 38
-// 181+80+65+(38×12) = 782 ✓
+const COL_WEEK     = Math.floor((782 - COL_NAME - COL_STATUS) / TOTAL_WEEKS); // 38
+// 261+65+(38×12) = 782 ✓
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -177,9 +176,6 @@ export function GanttDocument({ project, tasks, language }: GanttDocumentProps) 
           <Text style={[S.thText, { width: COL_NAME }]}>
             {language === "es" ? "Actividad" : "Activity"}
           </Text>
-          <Text style={[S.thText, { width: COL_ASSIGNEE }]}>
-            {language === "es" ? "Responsable" : "Assignee"}
-          </Text>
           <Text style={[S.thText, { width: COL_STATUS, textAlign: "center" }]}>
             {language === "es" ? "Estatus" : "Status"}
           </Text>
@@ -203,11 +199,6 @@ export function GanttDocument({ project, tasks, language }: GanttDocumentProps) 
               {/* Name */}
               <View style={[S.cellInfo, { width: COL_NAME }]}>
                 <Text style={S.cellText}>{task.name}</Text>
-              </View>
-
-              {/* Assignee */}
-              <View style={[S.cellInfo, { width: COL_ASSIGNEE }]}>
-                <Text style={S.cellMuted}>{task.assignee ?? "—"}</Text>
               </View>
 
               {/* Status */}

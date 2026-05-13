@@ -36,8 +36,9 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
     .eq("id", user.id)
     .single();
 
-  // Safe query helper
-  async function safeQuery<T>(promise: Promise<{ data: T | null; error: unknown }>) {
+  // Load workspace data in parallel — each query is individually safe so one
+  // table missing (e.g. takeoff_items not yet migrated) won't crash the page.
+  async function safeQuery<T>(promise: PromiseLike<{ data: T | null; error: unknown }>) {
     try {
       const { data } = await promise;
       return data;

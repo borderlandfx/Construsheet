@@ -129,7 +129,8 @@ export default function ReportsPDF({
                     stroke={DONUT_COLORS[i]}
                     strokeWidth="40"
                     strokeDasharray={`${dashLen} ${circumference}`}
-                    strokeDashoffset={`${-offset + circumference * 0.25}`}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    {...{ strokeDashoffset: `${-offset + circumference * 0.25}` } as Record<string, unknown>}
                   />
                 );
               })}

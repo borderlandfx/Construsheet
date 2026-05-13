@@ -2,31 +2,14 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-  Plus, Trash2, Loader2, X,
-  GripVertical, Download, ZoomIn, ZoomOut, Copy, ChevronRight, ChevronDown,
+  Trash2, Loader2, X,
+  Download, ZoomIn, ZoomOut, Copy, ChevronRight, ChevronDown, Link2,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { useToast } from "@/lib/context/ToastContext";
 import { t } from "@/lib/utils/i18n";
-import type { GanttTask, GanttTaskInsert, BudgetRow } from "@/lib/types/database.types";
+import type { GanttTask, GanttTaskInsert } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -95,7 +78,6 @@ function exportCSV(tasks: GanttTask[], totalWeeks: number, language: Locale, pro
 
   const headers = [
     language === "es" ? "Nombre" : "Name",
-    language === "es" ? "Responsable" : "Assignee",
     language === "es" ? "Estatus" : "Status",
     language === "es" ? "Avance %" : "Progress %",
     language === "es" ? "S. Inicio" : "Start Week",
@@ -116,7 +98,6 @@ function exportCSV(tasks: GanttTask[], totalWeeks: number, language: Locale, pro
     });
     return [
       task.name,
-      task.assignee ?? "",
       statusLabel,
       task.progress_pct ?? 0,
       task.start_week,
@@ -138,290 +119,6 @@ function exportCSV(tasks: GanttTask[], totalWeeks: number, language: Locale, pro
   a.download = `gantt-${Date.now()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-// ─── AddTaskModal ─────────────────────────────────────────────────────────────
-
-interface AddTaskModalProps {
-  projectId: string;
-  language: Locale;
-  taskCount: number;
-  colorIndex: number;
-  onSaved: (task: GanttTask) => void;
-  onClose: () => void;
-}
-
-function AddTaskModal({
-  projectId, language, taskCount, colorIndex, onSaved, onClose,
-}: AddTaskModalProps) {
-  const supabase = createClient();
-  const [saving, setSaving] = useState(false);
-  const [savedCount, setSavedCount] = useState(0);
-  const nameRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const [name, setName]           = useState("");
-  const [assignee, setAssignee]   = useState("");
-  const [startWeek, setStartWeek] = useState(1);
-  const [duration, setDuration]   = useState(2);
-  const [status, setStatus]       = useState<StatusKey>("pending");
-  const [progress, setProgress]   = useState(0);
-  const defaultColor = BAR_COLORS[colorIndex % BAR_COLORS.length];
-  const [color, setColor]         = useState(defaultColor);
-
-  function resetFields() {
-    setName(""); setAssignee(""); setStartWeek(1); setDuration(2);
-    setStatus("pending"); setProgress(0); setColor(defaultColor);
-    setTimeout(() => nameRef.current?.focus(), 50);
-  }
-
-  async function handleSave(andAnother = false) {
-    if (!name.trim()) return;
-    setSaving(true);
-    const resolvedProgress = status === "complete" ? 100 : status === "pending" ? Math.min(progress, 99) : progress;
-    const payload: GanttTaskInsert = {
-      project_id:     projectId,
-      name:           name.trim(),
-      assignee:       assignee.trim() || null,
-      start_week:     startWeek,
-      duration_weeks: duration,
-      color,
-      status,
-      progress_pct:   resolvedProgress,
-      sort_order:     taskCount + savedCount,
-    };
-    const { data, error } = await supabase
-      .from("gantt_tasks")
-      .insert(payload)
-      .select()
-      .single();
-    setSaving(false);
-    if (!error && data) {
-      onSaved(data as GanttTask);
-      if (andAnother) { setSavedCount((c) => c + 1); resetFields(); }
-      else onClose();
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.65)", backdropFilter: "blur(4px)" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        className="w-full flex flex-col gap-4"
-        style={{
-          maxWidth: 480,
-          background: CS.surface,
-          border: `1px solid ${CS.border}`,
-          borderRadius: 16,
-          padding: "1.5rem",
-          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
-              {language === "es" ? "Nueva Tarea" : "New Task"}
-            </span>
-            {savedCount > 0 && (
-              <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                style={{ background: CS.accent + "22", color: CS.accent }}
-              >
-                {savedCount} {language === "es" ? "guardadas" : "saved"}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            aria-label={language === "es" ? "Cerrar" : "Close"}
-            style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}
-          >
-            <X className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-
-        {/* Name */}
-        <div>
-          <label style={LBL}>{t("taskName", language)} *</label>
-          <input
-            ref={nameRef}
-            style={FIELD}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={language === "es" ? "Cimentación..." : "Foundation..."}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && e.ctrlKey) handleSave(true);
-              else if (e.key === "Enter") handleSave(false);
-            }}
-          />
-        </div>
-
-        {/* Assignee */}
-        <div>
-          <label style={LBL}>{language === "es" ? "Responsable" : "Assignee"}</label>
-          <input
-            style={FIELD}
-            value={assignee}
-            onChange={(e) => setAssignee(e.target.value)}
-            placeholder={language === "es" ? "Nombre..." : "Name..."}
-          />
-        </div>
-
-        {/* Start week + Duration */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label style={LBL}>
-              {language === "es" ? "Semana inicio" : "Start week"}
-            </label>
-            <input
-              style={FIELD}
-              type="number"
-              min={1}
-              value={startWeek}
-              onChange={(e) =>
-                setStartWeek(Math.max(1, parseInt(e.target.value) || 1))
-              }
-            />
-          </div>
-          <div>
-            <label style={LBL}>
-              {language === "es" ? "Duración (sem.)" : "Duration (wks)"}
-            </label>
-            <input
-              style={FIELD}
-              type="number"
-              min={1}
-              value={duration}
-              onChange={(e) =>
-                setDuration(Math.max(1, parseInt(e.target.value) || 1))
-              }
-            />
-          </div>
-        </div>
-
-        {/* Status + Progress */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label style={LBL}>{language === "es" ? "Estatus" : "Status"}</label>
-            <select
-              style={FIELD}
-              value={status}
-              onChange={(e) => {
-                const s = e.target.value as StatusKey;
-                setStatus(s);
-                if (s === "complete") setProgress(100);
-                else if (s === "pending") setProgress(0);
-              }}
-            >
-              <option value="pending">{language === "es" ? "Pendiente" : "Pending"}</option>
-              <option value="in-progress">{language === "es" ? "En curso" : "In progress"}</option>
-              <option value="complete">{language === "es" ? "Completo" : "Complete"}</option>
-            </select>
-          </div>
-          <div>
-            <label style={LBL}>
-              {language === "es" ? "Avance" : "Progress"}
-              <span style={{ marginLeft: 6, color: CS.accent, fontWeight: 700 }}>{progress}%</span>
-            </label>
-            <input
-              style={FIELD}
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={progress}
-              onChange={(e) => {
-                const p = parseInt(e.target.value);
-                setProgress(p);
-                if (p === 100) setStatus("complete");
-                else if (p === 0) setStatus("pending");
-                else setStatus("in-progress");
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Color picker */}
-        <div>
-          <label style={LBL}>
-            {language === "es" ? "Color de barra" : "Bar color"}
-          </label>
-          <div className="flex gap-2 flex-wrap">
-            {BAR_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setColor(c)}
-                className="rounded-full transition-transform"
-                style={{
-                  width: 22, height: 22,
-                  background: c,
-                  border: color === c ? "2px solid #fff" : "2px solid transparent",
-                  cursor: "pointer",
-                  transform: color === c ? "scale(1.25)" : "scale(1)",
-                }}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-2 justify-end pt-1 flex-wrap">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: "pointer",
-            }}
-          >
-            {savedCount > 0 ? (language === "es" ? "Listo" : "Done") : t("cancel", language)}
-          </button>
-          <button
-            onClick={() => handleSave(true)}
-            disabled={saving || !name.trim()}
-            className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.accent}`,
-              background: "transparent",
-              color: CS.accent,
-              cursor: saving || !name.trim() ? "not-allowed" : "pointer",
-              opacity: saving || !name.trim() ? 0.5 : 1,
-            }}
-            title="Ctrl+Enter"
-          >
-            + {language === "es" ? "Guardar y agregar otra" : "Save & add another"}
-          </button>
-          <button
-            onClick={() => handleSave(false)}
-            disabled={saving || !name.trim()}
-            className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{
-              background: CS.accent,
-              color: "#fff",
-              border: "none",
-              cursor: saving || !name.trim() ? "not-allowed" : "pointer",
-              opacity: saving || !name.trim() ? 0.6 : 1,
-            }}
-          >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {t("save", language)}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ─── SortableGanttRow ─────────────────────────────────────────────────────────
@@ -456,19 +153,6 @@ function SortableGanttRow({
   isParent, isChild, isCollapsed, childCount, onToggleCollapse,
   onDelete, onDuplicate, onStatusCycle, onProgressCycle, onResizeStart, onMoveStart, onEdit,
 }: SortableGanttRowProps) {
-  const {
-    attributes, listeners,
-    setNodeRef, transform, transition,
-    isDragging,
-  } = useSortable({ id: task.id });
-
-  const dndStyle: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.35 : 1,
-    zIndex: isDragging ? 9 : undefined,
-    position: "relative",
-  };
 
   const statusCfg = STATUS_CFG[task.status as StatusKey] ?? STATUS_CFG.pending;
   const color = task.color ?? BAR_COLORS[0];
@@ -495,12 +179,11 @@ function SortableGanttRow({
 
   return (
     <div
-      ref={setNodeRef}
       style={{
-        ...dndStyle,
         borderBottom: isParent
           ? `1px solid rgba(249,115,22,0.15)`
           : `1px solid ${CS.border}`,
+        position: "relative",
       }}
       className="group flex items-center"
       data-testid={`gantt-row-${task.id}`}
@@ -518,7 +201,7 @@ function SortableGanttRow({
           background: isParent ? "rgba(249,115,22,0.04)" : undefined,
         }}
       >
-        {/* Collapse toggle for parents / drag handle */}
+        {/* Collapse toggle for parents */}
         {isParent ? (
           <button
             type="button"
@@ -534,21 +217,7 @@ function SortableGanttRow({
             {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
         ) : (
-          <button
-            {...attributes}
-            {...listeners}
-            tabIndex={-1}
-            className="flex items-center justify-center rounded shrink-0 touch-none"
-            style={{
-              width: 20, height: 20,
-              background: "none", border: "none",
-              cursor: isDragging ? "grabbing" : "grab",
-              color: CS.muted,
-            }}
-            aria-label="Drag to reorder"
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </button>
+          <div style={{ width: 20, height: 20 }} />
         )}
 
         {/* Status pill — click cycles through states */}
@@ -598,17 +267,6 @@ function SortableGanttRow({
             </span>
           )}
         </button>
-
-        {/* Assignee abbreviation */}
-        {task.assignee && (
-          <span
-            className="text-xs font-dm-sans shrink-0 truncate"
-            style={{ color: CS.muted, maxWidth: 48 }}
-            title={task.assignee}
-          >
-            {task.assignee.split(" ")[0]}
-          </span>
-        )}
 
         {/* Progress badge — click cycles through 0/25/50/75/100 */}
         <button
@@ -795,7 +453,6 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
   const supabase = createClient();
   const [saving, setSaving]       = useState(false);
   const [name, setName]           = useState(task.name);
-  const [assignee, setAssignee]   = useState(task.assignee ?? "");
   const [startWeek, setStartWeek] = useState(task.start_week);
   const [duration, setDuration]   = useState(task.duration_weeks);
   const [status, setStatus]       = useState<StatusKey>(task.status as StatusKey);
@@ -814,7 +471,6 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
     const resolvedProgress = status === "complete" ? 100 : status === "pending" ? Math.min(progress, 99) : progress;
     const update = {
       name: name.trim(),
-      assignee: assignee.trim() || null,
       start_week: startWeek,
       duration_weeks: duration,
       status,
@@ -857,12 +513,6 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
           <label style={LBL}>{t("taskName", language)} *</label>
           <input autoFocus style={FIELD} value={name} onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSave()} />
-        </div>
-
-        <div>
-          <label style={LBL}>{language === "es" ? "Responsable" : "Assignee"}</label>
-          <input style={FIELD} value={assignee} onChange={(e) => setAssignee(e.target.value)}
-            placeholder={language === "es" ? "Nombre..." : "Name..."} />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -963,7 +613,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
     [...initialTasks].sort((a, b) => a.sort_order - b.sort_order)
   );
   const [loading, setLoading]           = useState(initialTasks.length === 0);
-  const [showAdd, setShowAdd]           = useState(false);
   const [editingTask, setEditingTask]   = useState<GanttTask | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [resizingId, setResizingId]     = useState<string | null>(null);
@@ -1111,71 +760,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
 
   useEffect(() => { onCountChange?.(tasks.length); }, [tasks.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── DnD sensors ──────────────────────────────────────────────────────────────
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const activeTask = tasks.find((t) => t.id === active.id);
-    const overTask = tasks.find((t) => t.id === over.id);
-    if (!activeTask || !overTask) return;
-
-    // ── Chapter reorder: both are chapters (or top-level) ──────────────
-    if (!activeTask.parent_task_id && !overTask.parent_task_id) {
-      const chapters = tasks.filter((t) => !t.parent_task_id).sort((a, b) => a.sort_order - b.sort_order);
-      const oldIdx = chapters.findIndex((t) => t.id === active.id);
-      const newIdx = chapters.findIndex((t) => t.id === over.id);
-      if (oldIdx === -1 || newIdx === -1) return;
-      const reordered = arrayMove(chapters, oldIdx, newIdx);
-      // Update sort_order for chapters, rebuild full task list
-      const updated = tasks.map((t) => {
-        if (!t.parent_task_id) {
-          const idx = reordered.findIndex((c) => c.id === t.id);
-          return idx >= 0 ? { ...t, sort_order: idx } : t;
-        }
-        return t;
-      });
-      setTasks(updated);
-      await Promise.all(
-        reordered.map((ch, i) =>
-          supabase.from("gantt_tasks").update({ sort_order: i }).eq("id", ch.id)
-        )
-      );
-      return;
-    }
-
-    // ── Child reorder within the same parent ───────────────────────────
-    if (activeTask.parent_task_id && activeTask.parent_task_id === overTask.parent_task_id) {
-      const siblings = tasks
-        .filter((t) => t.parent_task_id === activeTask.parent_task_id)
-        .sort((a, b) => a.sort_order - b.sort_order);
-      const oldIdx = siblings.findIndex((t) => t.id === active.id);
-      const newIdx = siblings.findIndex((t) => t.id === over.id);
-      if (oldIdx === -1 || newIdx === -1) return;
-      const reordered = arrayMove(siblings, oldIdx, newIdx);
-      const updated = tasks.map((t) => {
-        if (t.parent_task_id === activeTask.parent_task_id) {
-          const idx = reordered.findIndex((s) => s.id === t.id);
-          return idx >= 0 ? { ...t, sort_order: idx } : t;
-        }
-        return t;
-      });
-      setTasks(updated);
-      await Promise.all(
-        reordered.map((s, i) =>
-          supabase.from("gantt_tasks").update({ sort_order: i }).eq("id", s.id)
-        )
-      );
-      return;
-    }
-
-    // Different parents or mixed parent/child — ignore
-  }
 
   // ── Progress cycle (0 → 25 → 50 → 75 → 100 → 0) ─────────────────────────────
   async function handleProgressCycle(id: string) {
@@ -1325,7 +909,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
     const payload: GanttTaskInsert = {
       project_id: projectId,
       name: source.name + (language === "es" ? " (copia)" : " (copy)"),
-      assignee: source.assignee,
       start_week: source.start_week,
       duration_weeks: source.duration_weeks,
       color: source.color,
@@ -1409,7 +992,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         return `<td style="text-align:center;padding:2px;${borderStyle}">${inBar ? `<div style="background:${task.color};height:13px;border-radius:3px"></div>` : ""}</td>`;
       }).join("");
 
-      return `<tr><td style="white-space:nowrap;padding:4px 8px;font-weight:500">${task.name}</td><td style="padding:4px 8px">${dateRange}</td><td style="white-space:nowrap;padding:4px 8px;color:#6b7280">${task.assignee ?? "—"}</td><td style="padding:4px 8px;color:#6b7280;font-size:10px">${statusLabel}</td><td style="padding:4px 8px;font-size:10px">${progressBar}</td>${weekCells}</tr>`;
+      return `<tr><td style="white-space:nowrap;padding:4px 8px;font-weight:500">${task.name}</td><td style="padding:4px 8px">${dateRange}</td><td style="padding:4px 8px;color:#6b7280;font-size:10px">${statusLabel}</td><td style="padding:4px 8px;font-size:10px">${progressBar}</td>${weekCells}</tr>`;
     }).join("");
 
     const html = `<!DOCTYPE html>
@@ -1438,7 +1021,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       <tr>
         <th rowspan="2" style="width:160px;background:#f97316;vertical-align:bottom">${lang === "es" ? "Tarea" : "Task"}</th>
         <th rowspan="2" style="width:100px;background:#f97316;vertical-align:bottom">${lang === "es" ? "Fechas" : "Dates"}</th>
-        <th rowspan="2" style="width:90px;background:#f97316;vertical-align:bottom">${lang === "es" ? "Responsable" : "Assignee"}</th>
         <th rowspan="2" style="width:70px;background:#f97316;vertical-align:bottom">${lang === "es" ? "Estatus" : "Status"}</th>
         <th rowspan="2" style="width:90px;background:#f97316;vertical-align:bottom">${lang === "es" ? "Avance" : "Progress"}</th>
         ${monthHeaderCells}
@@ -1638,22 +1220,18 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
             </div>
           )}
 
-          {/* Add task */}
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            aria-label={lang === "es" ? "Agregar tarea" : "Add task"}
-            className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
+          {/* Sync badge — tasks come from Budget */}
+          <span
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium font-dm-sans"
             style={{
-              background: CS.accent,
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
+              background: `${CS.accent}18`,
+              color: CS.accent,
+              border: `1px solid ${CS.accent}33`,
             }}
           >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "+ Agregar Tarea" : "+ Add Task"}
-          </button>
+            <Link2 className="h-3.5 w-3.5" />
+            {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
+          </span>
         </div>
       </div>
 
@@ -1686,23 +1264,9 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
             style={{ color: CS.muted }}
           >
             {lang === "es"
-              ? "Agrega tareas para visualizar el cronograma de obra."
-              : "Add tasks to visualize the project schedule."}
+              ? "Agrega partidas en la pestaña de Presupuesto para verlas aquí."
+              : "Add items in the Budget tab to see them here."}
           </p>
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans mt-1"
-            style={{
-              background: CS.accent,
-              color: "#fff",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {lang === "es" ? "Agregar primera tarea" : "Add first task"}
-          </button>
         </div>
       )}
 
@@ -1788,48 +1352,37 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
             <div style={{ width: ACTION_W, flexShrink: 0 }} />
           </div>
 
-          {/* Rows — DnD sortable, with parent/child hierarchy */}
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={visibleTasks.map((t) => t.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {visibleTasks.map((task) => {
-                const isParent = task.is_chapter || (!task.parent_task_id && tasks.some((t) => t.parent_task_id === task.id));
-                const isChild = !!task.parent_task_id;
-                const childCount = isParent ? tasks.filter((t) => t.parent_task_id === task.id).length : 0;
-                return (
-                  <SortableGanttRow
-                    key={task.id}
-                    task={task}
-                    totalWeeks={totalWeeks}
-                    todayPct={todayPct}
-                    language={lang}
-                    isResizing={resizingId === task.id}
-                    isMoving={movingId === task.id}
-                    projectStart={projectStart}
-                    timelineMinPx={timelineMinPx}
-                    isParent={isParent}
-                    isChild={isChild}
-                    isCollapsed={collapsedIds.has(task.id)}
-                    childCount={childCount}
-                    onToggleCollapse={() => toggleCollapse(task.id)}
-                    onDelete={handleDelete}
-                    onDuplicate={handleDuplicateTask}
-                    onStatusCycle={handleStatusCycle}
-                    onProgressCycle={handleProgressCycle}
-                    onResizeStart={handleResizeStart}
-                    onMoveStart={handleMoveStart}
-                    onEdit={setEditingTask}
-                  />
-                );
-              })}
-            </SortableContext>
-          </DndContext>
+          {/* Rows — static list ordered by budget sort_order */}
+          {visibleTasks.map((task) => {
+            const isParent = task.is_chapter || (!task.parent_task_id && tasks.some((t) => t.parent_task_id === task.id));
+            const isChild = !!task.parent_task_id;
+            const childCount = isParent ? tasks.filter((t) => t.parent_task_id === task.id).length : 0;
+            return (
+              <SortableGanttRow
+                key={task.id}
+                task={task}
+                totalWeeks={totalWeeks}
+                todayPct={todayPct}
+                language={lang}
+                isResizing={resizingId === task.id}
+                isMoving={movingId === task.id}
+                projectStart={projectStart}
+                timelineMinPx={timelineMinPx}
+                isParent={isParent}
+                isChild={isChild}
+                isCollapsed={collapsedIds.has(task.id)}
+                childCount={childCount}
+                onToggleCollapse={() => toggleCollapse(task.id)}
+                onDelete={handleDelete}
+                onDuplicate={handleDuplicateTask}
+                onStatusCycle={handleStatusCycle}
+                onProgressCycle={handleProgressCycle}
+                onResizeStart={handleResizeStart}
+                onMoveStart={handleMoveStart}
+                onEdit={setEditingTask}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -1867,22 +1420,10 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
             style={{ color: "rgba(139,150,165,0.55)" }}
           >
             {lang === "es"
-              ? "↕ Arrastrar · ← → Barra/borde · Clic en estatus"
-              : "↕ Drag to reorder · ← → Bar/edge to move · Click status to cycle"}
+              ? "← → Barra/borde para mover · Clic en estatus para cambiar"
+              : "← → Bar/edge to move · Click status to cycle"}
           </span>
         </div>
-      )}
-
-      {/* ── Add task modal ─────────────────────────────────── */}
-      {showAdd && (
-        <AddTaskModal
-          projectId={projectId}
-          language={lang}
-          taskCount={tasks.length}
-          colorIndex={tasks.length}
-          onSaved={(task) => setTasks((p) => [...p, task])}
-          onClose={() => setShowAdd(false)}
-        />
       )}
 
       {/* ── Edit task modal ─────────────────────────────────── */}

@@ -1684,16 +1684,20 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
       }
       setRows(allUpdated);
 
-      // Persist only the changed section rows
-      const changed = reordered.map((r, i) => {
+      // Persist changed budget rows + mirror sort_order to gantt child tasks
+      const changed = reordered.map((r) => {
         const globalIdx = allUpdated.findIndex((u) => u.id === r.id);
-        return { id: r.id, sort_order: allUpdated[globalIdx].sort_order };
+        return { id: r.id, sort_order: allUpdated[globalIdx].sort_order, description: r.description, section: r.section };
       });
-      await Promise.all(
-        changed.map((r) =>
+      await Promise.all([
+        ...changed.map((r) =>
           supabase.from("budget_rows").update({ sort_order: r.sort_order }).eq("id", r.id)
-        )
-      );
+        ),
+        ...changed.map((r) =>
+          supabase.from("gantt_tasks").update({ sort_order: r.sort_order })
+            .eq("project_id", projectId).eq("name", r.description).eq("budget_section", r.section).eq("is_chapter", false)
+        ),
+      ]);
     },
     [rows, sectionOrder, supabase]
   );
@@ -2324,6 +2328,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
 
       {/* ── Budget table ───────────────────────────────────── */}
       {rows.length > 0 && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="rounded-[10px] overflow-hidden" style={{ border: `1px solid ${CS.border}` }}>
           <div className="overflow-x-auto">
             <table className="w-full font-dm-sans" style={{ minWidth: 760 }}>
@@ -2342,8 +2347,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
                   <th style={{ ...thStyle, width: 40 }} />
                 </tr>
               </thead>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={sections.map((s) => `chapter:${s}`)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={sections.map((s) => `chapter:${s}`)} strategy={verticalListSortingStrategy}>
                   <tbody>
                     {sections.map((sec, secIdx) => {
                       const secRows = rows.filter((r) => r.section === sec)
@@ -2403,7 +2407,6 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
                     })}
                   </tbody>
                 </SortableContext>
-              </DndContext>
 
               <tfoot>
                 <tr>
@@ -2428,6 +2431,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
             </table>
           </div>
         </div>
+        </DndContext>
       )}
 
       {/* ── APU Detail Panel ───────────────────────────────── */}

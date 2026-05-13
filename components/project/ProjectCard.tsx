@@ -386,7 +386,6 @@ export default function ProjectCard({ project: initialProject, locale, onUpdated
               (srcTasks as import("@/lib/types/database.types").GanttTask[]).map((tk, i) => ({
                 project_id: newId,
                 name: tk.name,
-                assignee: tk.assignee,
                 start_week: tk.start_week,
                 duration_weeks: tk.duration_weeks,
                 color: tk.color,
