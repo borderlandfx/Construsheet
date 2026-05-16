@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -20,6 +21,8 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
   const router = useRouter();
   const supabase = createClient();
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -144,7 +147,9 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
             (e.currentTarget as HTMLButtonElement).style.color = "var(--cs-muted)";
           }}
         >
-          {isDark ? (
+          {!mounted ? (
+            <div className="h-4 w-4" />
+          ) : isDark ? (
             <Sun className="h-4 w-4" aria-hidden="true" />
           ) : (
             <Moon className="h-4 w-4" aria-hidden="true" />

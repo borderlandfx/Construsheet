@@ -45,9 +45,9 @@ const CS = {
 // ─── Status pill ──────────────────────────────────────────────────────────────
 
 const STATUS_CFG = {
-  approved: { label: { es: "Aprobado",    en: "Approved"    }, bg: "rgba(34,197,94,0.12)",  color: "#22c55e" },
-  review:   { label: { es: "En revisión", en: "Under Review" }, bg: "rgba(251,191,36,0.12)", color: "#fbbf24" },
-  pending:  { label: { es: "Pendiente",   en: "Pending"      }, bg: "rgba(96,165,250,0.12)", color: "#60a5fa" },
+  pending:     { label: { es: "Pendiente",   en: "Pending"      }, bg: "rgba(59,130,246,0.2)",  color: "#60a5fa" },
+  "in-review": { label: { es: "En revisión", en: "Under Review" }, bg: "rgba(245,158,11,0.2)", color: "#f59e0b" },
+  approved:    { label: { es: "Aprobado",    en: "Approved"     }, bg: "rgba(16,185,129,0.2)",  color: "#10b981" },
 } as const;
 type StatusKey = keyof typeof STATUS_CFG;
 
@@ -98,7 +98,7 @@ function safeEval(expr: string): number | null {
 
 type EditableField = "code" | "description" | "unit" | "quantity" | "unit_price" | "status" | "assignee";
 
-const STATUS_CYCLE: StatusKey[] = ["pending", "review", "approved"];
+const STATUS_CYCLE: StatusKey[] = ["pending", "in-review", "approved"];
 
 function InlineCell({ field, displayValue, rawValue, onSave }:
   { field: EditableField; displayValue: React.ReactNode; rawValue: string; onSave: (v: string) => void }
@@ -329,7 +329,7 @@ function AddItemModal({ projectId, language, sections, rowCount, fmt, prefill, o
             <label style={LBL}>{language === "es" ? "Estatus" : "Status"}</label>
             <select style={FIELD} value={status} onChange={(e) => setStatus(e.target.value as StatusKey)}>
               <option value="pending">{language === "es" ? "Pendiente" : "Pending"}</option>
-              <option value="review">{language === "es" ? "En revisión" : "Under Review"}</option>
+              <option value="in-review">{language === "es" ? "En revisión" : "Under Review"}</option>
               <option value="approved">{language === "es" ? "Aprobado" : "Approved"}</option>
             </select>
           </div>
@@ -1426,10 +1426,10 @@ function SortableBudgetRow({
 // The DB trigger on budget_rows automatically creates gantt_tasks.
 // This helper only syncs status changes to existing gantt tasks.
 
-const BUDGET_TO_GANTT_STATUS: Record<string, "complete" | "in-progress" | "pending"> = {
+const BUDGET_TO_GANTT_STATUS: Record<string, "approved" | "in-review" | "pending"> = {
   pending: "pending",
-  review: "in-progress",
-  approved: "complete",
+  "in-review": "in-review",
+  approved: "approved",
 };
 
 async function syncGanttStatus(
@@ -1457,8 +1457,8 @@ interface BudgetTabProps {
   onCountChange?: (n: number) => void;
 }
 
-export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCountChange }: BudgetTabProps) {
-  const { projectId, language, fmt, setActiveTab, userId } = useWorkspace();
+export default function BudgetTab({ initialRows: _initialRows, apuItems: initialApuItems, onCountChange }: BudgetTabProps) {
+  const { projectId, language, fmt, setActiveTab, userId, budgetRows: rows, setBudgetRows: setRows } = useWorkspace();
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -1477,24 +1477,19 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
     );
   }, []);
 
-  const [rows, setRows]               = useState<BudgetRow[]>(() => {
-    // Filter out ghost/empty rows and normalize section names to prevent duplicates
-    return initialRows
-      .filter((r) => !isGhostRow(r))
-      .map((r) => ({ ...r, section: r.section.trim() }));
-  });
-  // Fetch fresh rows from DB on mount to pick up rows inserted from other tabs (e.g. APU → Budget)
+  // Fetch fresh rows from DB once on first mount (picks up rows from other tabs like APU → Budget)
+  const hasFetched = useRef(false);
   useEffect(() => {
-    let cancelled = false;
+    if (hasFetched.current) return;
+    hasFetched.current = true;
     supabase.from("budget_rows").select("*").eq("project_id", projectId).order("sort_order")
       .then(({ data }) => {
-        if (cancelled || !data) return;
+        if (!data) return;
         const fresh = (data as BudgetRow[])
           .filter((r) => !isGhostRow(r))
           .map((r) => ({ ...r, section: r.section.trim() }));
         setRows(fresh);
       });
-    return () => { cancelled = true; };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [apuItems]                    = useState<ApuItem[]>(initialApuItems);
@@ -1521,7 +1516,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
 
   // Search / filter
   const [budgetSearch, setBudgetSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "review" | "approved">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "in-review" | "approved">("all");
 
   // Row context menu
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
@@ -1607,9 +1602,9 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
 
   // Clean up ghost rows from DB on mount
   useEffect(() => {
-    const ghosts = initialRows.filter((r) => isGhostRow(r));
+    const ghosts = _initialRows.filter((r: BudgetRow) => isGhostRow(r));
     if (ghosts.length > 0) {
-      ghosts.forEach((g) => supabase.from("budget_rows").delete().eq("id", g.id));
+      ghosts.forEach((g: BudgetRow) => supabase.from("budget_rows").delete().eq("id", g.id));
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1713,20 +1708,31 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
       if (field === "unit_price") patch = { unit_price: parseFloat(rawVal) || 0 };
       if (field === "status")     patch = { status: rawVal as StatusKey };
       if (field === "assignee")   patch = { assignee: rawVal.trim() || null };
+
+      // Optimistic update
+      const prevRows = rows;
       setRows((prev) => prev.map((r) => {
         if (r.id !== rowId) return r;
         const next = { ...r, ...patch };
         next.total = next.quantity * next.unit_price;
         return next;
       }));
-      await supabase.from("budget_rows").update(patch).eq("id", rowId);
+
+      const { error } = await supabase.from("budget_rows").update(patch).eq("id", rowId);
+      if (error) {
+        // Revert on failure
+        setRows(prevRows);
+        toast(lang === "es" ? "Error al guardar" : "Failed to save", "error");
+        return;
+      }
+
       // Sync status to gantt
       if (field === "status") {
         const row = rows.find((r) => r.id === rowId);
         if (row) syncGanttStatus(supabase, projectId, { description: row.description, section: row.section }, rawVal);
       }
     },
-    [supabase, projectId, rows]
+    [supabase, projectId, rows, lang, toast, setRows]
   );
 
   // ── Row delete ────────────────────────────────────────────────────────────
@@ -1943,11 +1949,11 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
 
     const statusLabel = (s: string) =>
       lang === "es"
-        ? ({ approved: "Aprobado", review: "En revisión", pending: "Pendiente" }[s] ?? s)
-        : ({ approved: "Approved", review: "Under Review", pending: "Pending" }[s] ?? s);
+        ? ({ approved: "Aprobado", "in-review": "En revisión", pending: "Pendiente" }[s] ?? s)
+        : ({ approved: "Approved", "in-review": "Under Review", pending: "Pending" }[s] ?? s);
 
     const statusColor = (s: string) =>
-      ({ approved: "#22c55e", review: "#fbbf24", pending: "#60a5fa" }[s] ?? "#6b7280");
+      ({ approved: "#10b981", "in-review": "#f59e0b", pending: "#60a5fa" }[s] ?? "#6b7280");
 
     const secs = Array.from(new Set(rows.map((r) => r.section)));
     let rowNum = 0;
@@ -1983,7 +1989,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
     }).join("");
 
     const approvedCount  = rows.filter((r) => r.status === "approved").length;
-    const reviewCount    = rows.filter((r) => r.status === "review").length;
+    const reviewCount    = rows.filter((r) => r.status === "in-review").length;
     const pendingCount   = rows.filter((r) => r.status === "pending").length;
 
     const html = `<!DOCTYPE html>
@@ -2211,10 +2217,10 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
           {/* Status filter pills */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {([
-              { key: "all",      label: lang === "es" ? "Todos"       : "All"          },
-              { key: "pending",  label: lang === "es" ? "Pendiente"   : "Pending",   color: "#60a5fa" },
-              { key: "review",   label: lang === "es" ? "En revisión" : "In Review",  color: "#fbbf24" },
-              { key: "approved", label: lang === "es" ? "Aprobado"    : "Approved",   color: "#22c55e" },
+              { key: "all",        label: lang === "es" ? "Todos"       : "All"          },
+              { key: "pending",    label: lang === "es" ? "Pendiente"   : "Pending",      color: "#60a5fa" },
+              { key: "in-review",  label: lang === "es" ? "En revisión" : "Under Review", color: "#f59e0b" },
+              { key: "approved",   label: lang === "es" ? "Aprobado"    : "Approved",     color: "#10b981" },
             ] as { key: typeof statusFilter; label: string; color?: string }[]).map(({ key, label, color }) => {
               const active = statusFilter === key;
               return (
@@ -2248,7 +2254,7 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
       {/* ── Approval status bar ────────────────────────────── */}
       {rows.length > 0 && (() => {
         const approved = rows.filter((r) => r.status === "approved");
-        const review   = rows.filter((r) => r.status === "review");
+        const review   = rows.filter((r) => r.status === "in-review");
         const pending  = rows.filter((r) => r.status === "pending");
         const valOf = (arr: BudgetRow[]) =>
           arr.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
@@ -2261,8 +2267,8 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
         const pPending  = (vPending  / total) * 100;
 
         const segments = [
-          { pct: pApproved, color: "#22c55e", label: lang === "es" ? "Aprobado"    : "Approved",     count: approved.length, value: vApproved },
-          { pct: pReview,   color: "#fbbf24", label: lang === "es" ? "En revisión" : "Under Review", count: review.length,   value: vReview   },
+          { pct: pApproved, color: "#10b981", label: lang === "es" ? "Aprobado"    : "Approved",     count: approved.length, value: vApproved },
+          { pct: pReview,   color: "#f59e0b", label: lang === "es" ? "En revisión" : "Under Review", count: review.length,   value: vReview   },
           { pct: pPending,  color: "#60a5fa", label: lang === "es" ? "Pendiente"   : "Pending",      count: pending.length,  value: vPending  },
         ];
 
@@ -2314,9 +2320,10 @@ export default function BudgetTab({ initialRows, apuItems: initialApuItems, onCo
               style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
               <Import className="h-4 w-4" />{lang === "es" ? "Importar APU" : "Import APU"}
             </button>
-            <button onClick={() => setShowLibraryModal(true)}
-              className="flex items-center gap-2 bg-white border px-4 py-2 rounded-lg hover:bg-gray-50">
-              📚 {lang === "es" ? "Importar desde Biblioteca" : "Import from Library"}
+            <button onClick={() => setShowLibrary(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
+              style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
+              {lang === "es" ? "Importar desde Biblioteca" : "Import from Library"}
             </button>
             <button onClick={() => setShowPaste(true)} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
               style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
