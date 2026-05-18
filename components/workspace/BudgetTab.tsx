@@ -25,7 +25,7 @@ import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { useToast } from "@/lib/context/ToastContext";
 import { t } from "@/lib/utils/i18n";
 import type {
-  BudgetRow, BudgetRowInsert, BudgetRowUpdate, ApuItem, ApuLineItem,
+  BudgetRow, BudgetRowInsert, ApuItem, ApuLineItem,
 } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 import { calcCostsDetailed, type EditorDraft } from "@/components/workspace/APUTab";
@@ -1694,7 +1694,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         ),
       ]);
     },
-    [rows, sectionOrder, supabase]
+    [rows, sectionOrder, supabase, projectId, setRows]
   );
 
   // ── Inline cell save ──────────────────────────────────────────────────────
