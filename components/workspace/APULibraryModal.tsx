@@ -16,12 +16,12 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
-  budgetId: string;
+  budgetId?: string; // deprecated – unused
   userId: string;
   onSuccess: () => void;
 }
 
-export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, userId, onSuccess }: Props) {
+export default function APULibraryModal({ isOpen, onClose, projectId, userId, onSuccess }: Props) {
   const supabase = createClient();
   const [apus, setApus] = useState<APU[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -68,7 +68,6 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
       .from('budget_rows')
       .insert({
         project_id: projectId,
-        budget_id: budgetId || null,
         description: apu.description,
         code: apu.code,
         unit: apu.unit,

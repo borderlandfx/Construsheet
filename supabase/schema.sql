@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS budget_rows (
   quantity    DECIMAL(12,3)  DEFAULT 0,
   unit_price  DECIMAL(12,2)  DEFAULT 0,
   total       DECIMAL(12,2)  GENERATED ALWAYS AS (quantity * unit_price) STORED,
-  status      TEXT           DEFAULT 'pending' CHECK (status IN ('approved', 'review', 'pending')),
+  status      TEXT           DEFAULT 'pending' CHECK (status IN ('approved', 'in-review', 'pending')),
   assignee    TEXT,
   sort_order  INTEGER        DEFAULT 0,
   created_at  TIMESTAMPTZ    DEFAULT NOW()
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS gantt_tasks (
   start_week     INTEGER     DEFAULT 1,
   duration_weeks INTEGER     DEFAULT 2,
   color          TEXT        DEFAULT '#f97316',
-  status         TEXT        DEFAULT 'pending' CHECK (status IN ('complete', 'in-progress', 'pending')),
+  status         TEXT        DEFAULT 'pending' CHECK (status IN ('approved', 'in-review', 'pending')),
   progress_pct   INTEGER     DEFAULT 0 CHECK (progress_pct BETWEEN 0 AND 100),
   parent_task_id UUID        REFERENCES gantt_tasks(id) ON DELETE CASCADE,
   budget_section TEXT,
