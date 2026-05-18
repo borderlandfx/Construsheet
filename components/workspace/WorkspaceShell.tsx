@@ -350,6 +350,14 @@ export default function WorkspaceShell({
       initialCurrency={initialCurrency}
       initialLanguage={initialLanguage}
       initialSettings={initialSettings}
+      initialBudgetRows={budgetRows.filter((r) => {
+        const desc = r.description.trim();
+        return !(
+          (desc === "(empty)" || desc === "(vacío)" || desc === "") &&
+          (r.code === "—" || r.code === null || r.code === undefined || r.code === "") &&
+          r.quantity === 0 && r.unit_price === 0
+        );
+      }).map((r) => ({ ...r, section: r.section.trim() }))}
     >
       <WorkspaceInner
         project={project}

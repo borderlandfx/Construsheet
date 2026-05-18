@@ -45,8 +45,8 @@ export type { ApuLineItem } from "@/lib/types/database.types";
 
 export type TabId = "apu" | "budget" | "gantt";
 
-export type BudgetRowStatus  = "approved" | "review"     | "pending";
-export type GanttTaskStatus  = "complete" | "in-progress"| "pending";
+export type BudgetRowStatus  = "approved" | "in-review" | "pending";
+export type GanttTaskStatus  = "approved" | "in-review" | "pending";
 export type ProjectStatus    = "active"   | "archived"   | "completed";
 
 /** Currency options supported by ConstruSheet */

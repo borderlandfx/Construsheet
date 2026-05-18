@@ -21,9 +21,9 @@ const BAR_COLORS = [
 ] as const;
 
 const STATUS_CFG = {
-  pending:      { label: { es: "Pendiente",  en: "Pending"     }, color: "#6b7280", next: "in-progress" as const },
-  "in-progress":{ label: { es: "En curso",   en: "In progress" }, color: "#f97316", next: "complete"    as const },
-  complete:     { label: { es: "Completo",   en: "Complete"    }, color: "#14b8a6", next: "pending"     as const },
+  pending:      { label: { es: "Pendiente",   en: "Pending"      }, color: "#60a5fa" },
+  "in-review":  { label: { es: "En revisión", en: "Under Review" }, color: "#f59e0b" },
+  approved:     { label: { es: "Aprobado",    en: "Approved"     }, color: "#10b981" },
 } as const;
 
 type StatusKey = keyof typeof STATUS_CFG;
@@ -141,7 +141,6 @@ interface SortableGanttRowProps {
   onToggleCollapse?: () => void;
   onDelete: (id: string) => void;
   onDuplicate: (task: GanttTask) => void;
-  onStatusCycle: (id: string) => void;
   onProgressCycle: (id: string) => void;
   onResizeStart: (e: React.MouseEvent, task: GanttTask) => void;
   onMoveStart: (e: React.MouseEvent, task: GanttTask) => void;
@@ -151,7 +150,7 @@ interface SortableGanttRowProps {
 function SortableGanttRow({
   task, totalWeeks, todayPct, language, isResizing, isMoving, projectStart, timelineMinPx,
   isParent, isChild, isCollapsed, childCount, onToggleCollapse,
-  onDelete, onDuplicate, onStatusCycle, onProgressCycle, onResizeStart, onMoveStart, onEdit,
+  onDelete, onDuplicate, onProgressCycle, onResizeStart, onMoveStart, onEdit,
 }: SortableGanttRowProps) {
 
   const statusCfg = STATUS_CFG[task.status as StatusKey] ?? STATUS_CFG.pending;
@@ -220,31 +219,22 @@ function SortableGanttRow({
           <div style={{ width: 20, height: 20 }} />
         )}
 
-        {/* Status pill — click cycles through states */}
-        <button
-          type="button"
-          onClick={() => onStatusCycle(task.id)}
-          className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium font-dm-sans transition-opacity hover:opacity-75"
+        {/* Status pill — read-only, synced from Budget tab */}
+        <span
+          className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium font-dm-sans"
           style={{
-            background: `${statusCfg.color}22`,
+            background: `${statusCfg.color}33`,
             color: statusCfg.color,
-            border: "none",
-            cursor: "pointer",
             whiteSpace: "nowrap",
             lineHeight: 1.5,
           }}
-          title={
-            language === "es"
-              ? "Clic para cambiar estatus"
-              : "Click to cycle status"
-          }
         >
           <span
             className="inline-block rounded-full mr-1"
             style={{ width: 5, height: 5, background: statusCfg.color, verticalAlign: "middle" }}
           />
           {statusCfg.label[language]}
-        </button>
+        </span>
 
         {/* Task name — click to edit */}
         <button
@@ -325,7 +315,7 @@ function SortableGanttRow({
             height: isParent ? 20 : 26,
             minWidth: 4,
             background: color,
-            opacity: task.status === "complete" ? 0.6 : isParent ? 0.75 : 1,
+            opacity: task.status === "approved" ? 0.6 : isParent ? 0.75 : 1,
             cursor: isMoving ? "grabbing" : "grab",
             borderRadius: isParent ? 3 : undefined,
             boxShadow: (isResizing || isMoving)
@@ -455,8 +445,8 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
   const [name, setName]           = useState(task.name);
   const [startWeek, setStartWeek] = useState(task.start_week);
   const [duration, setDuration]   = useState(task.duration_weeks);
-  const [status, setStatus]       = useState<StatusKey>(task.status as StatusKey);
-  const [progress, setProgress]   = useState(task.progress_pct ?? (task.status === "complete" ? 100 : task.status === "in-progress" ? 50 : 0));
+  const status = task.status as StatusKey;
+  const [progress, setProgress]   = useState(task.progress_pct ?? 0);
   const [color, setColor]         = useState(task.color);
 
   useEffect(() => {
@@ -468,13 +458,11 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
   async function handleSave() {
     if (!name.trim()) return;
     setSaving(true);
-    const resolvedProgress = status === "complete" ? 100 : status === "pending" ? Math.min(progress, 99) : progress;
     const update = {
       name: name.trim(),
       start_week: startWeek,
       duration_weeks: duration,
-      status,
-      progress_pct: resolvedProgress,
+      progress_pct: progress,
       color,
     };
     await supabase.from("gantt_tasks").update(update).eq("id", task.id);
@@ -528,20 +516,19 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
           </div>
         </div>
 
-        {/* Status + Progress */}
+        {/* Status (read-only) + Progress */}
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label style={LBL}>{language === "es" ? "Estatus" : "Status"}</label>
-            <select style={FIELD} value={status} onChange={(e) => {
-              const s = e.target.value as StatusKey;
-              setStatus(s);
-              if (s === "complete") setProgress(100);
-              else if (s === "pending") setProgress(0);
-            }}>
-              <option value="pending">{language === "es" ? "Pendiente" : "Pending"}</option>
-              <option value="in-progress">{language === "es" ? "En curso" : "In progress"}</option>
-              <option value="complete">{language === "es" ? "Completo" : "Complete"}</option>
-            </select>
+            <span
+              className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium font-dm-sans"
+              style={{ background: `${(STATUS_CFG[status] ?? STATUS_CFG.pending).color}33`, color: (STATUS_CFG[status] ?? STATUS_CFG.pending).color }}
+            >
+              {(STATUS_CFG[status] ?? STATUS_CFG.pending).label[language]}
+            </span>
+            <span className="block text-xs mt-1" style={{ color: CS.muted }}>
+              {language === "es" ? "Se controla desde Presupuesto" : "Controlled from Budget"}
+            </span>
           </div>
           <div>
             <label style={LBL}>
@@ -549,13 +536,7 @@ function EditTaskModal({ task, language, onSaved, onClose }: EditTaskModalProps)
               <span style={{ marginLeft: 6, color: CS.accent, fontWeight: 700 }}>{progress}%</span>
             </label>
             <input style={FIELD} type="range" min={0} max={100} step={5} value={progress}
-              onChange={(e) => {
-                const p = parseInt(e.target.value);
-                setProgress(p);
-                if (p === 100) setStatus("complete");
-                else if (p === 0) setStatus("pending");
-                else setStatus("in-progress");
-              }} />
+              onChange={(e) => setProgress(parseInt(e.target.value))} />
           </div>
         </div>
 
@@ -769,25 +750,12 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
     const idx = PROGRESS_STEPS.indexOf(cur as typeof PROGRESS_STEPS[number]);
     const next = PROGRESS_STEPS[(idx + 1) % PROGRESS_STEPS.length];
     // Infer status from new progress
-    const nextStatus: GanttTask["status"] =
-      next === 100 ? "complete" : next > 0 ? "in-progress" : "pending";
     setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, progress_pct: next, status: nextStatus } : t))
+      prev.map((t) => (t.id === id ? { ...t, progress_pct: next } : t))
     );
-    await supabase.from("gantt_tasks").update({ progress_pct: next, status: nextStatus }).eq("id", id);
+    await supabase.from("gantt_tasks").update({ progress_pct: next }).eq("id", id);
   }
 
-  // ── Status cycle ─────────────────────────────────────────────────────────────
-  async function handleStatusCycle(id: string) {
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-    const next = STATUS_CFG[task.status as StatusKey]?.next ?? "pending";
-    const nextProgress = next === "complete" ? 100 : next === "pending" ? 0 : task.progress_pct ?? 0;
-    setTasks((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: next, progress_pct: nextProgress } : t))
-    );
-    await supabase.from("gantt_tasks").update({ status: next, progress_pct: nextProgress }).eq("id", id);
-  }
 
   // ── Resize ───────────────────────────────────────────────────────────────────
   const handleResizeStart = useCallback(
@@ -1083,21 +1051,21 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
               {lang === "es" ? "semanas" : "weeks"}
             </p>
             {tasks.length > 0 && (() => {
-              const complete   = tasks.filter((t) => t.status === "complete").length;
-              const inProgress = tasks.filter((t) => t.status === "in-progress").length;
+              const approved   = tasks.filter((t) => t.status === "approved").length;
+              const inReview   = tasks.filter((t) => t.status === "in-review").length;
               const pending    = tasks.filter((t) => t.status === "pending").length;
               const avgPct = Math.round(tasks.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / tasks.length);
               return (
                 <>
                   <span style={{ color: CS.muted, fontSize: "0.65rem" }}>·</span>
-                  {complete > 0 && (
-                    <span className="text-xs font-dm-sans" style={{ color: STATUS_CFG.complete.color }}>
-                      ✓ {complete}
+                  {approved > 0 && (
+                    <span className="text-xs font-dm-sans" style={{ color: STATUS_CFG.approved.color }}>
+                      ✓ {approved}
                     </span>
                   )}
-                  {inProgress > 0 && (
-                    <span className="text-xs font-dm-sans" style={{ color: STATUS_CFG["in-progress"].color }}>
-                      ⟳ {inProgress}
+                  {inReview > 0 && (
+                    <span className="text-xs font-dm-sans" style={{ color: STATUS_CFG["in-review"].color }}>
+                      ⟳ {inReview}
                     </span>
                   )}
                   {pending > 0 && (
@@ -1375,7 +1343,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
                 onToggleCollapse={() => toggleCollapse(task.id)}
                 onDelete={handleDelete}
                 onDuplicate={handleDuplicateTask}
-                onStatusCycle={handleStatusCycle}
                 onProgressCycle={handleProgressCycle}
                 onResizeStart={handleResizeStart}
                 onMoveStart={handleMoveStart}

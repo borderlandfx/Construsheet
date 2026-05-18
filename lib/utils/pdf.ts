@@ -21,13 +21,10 @@ export const PDF_COLORS = {
   muted:        "#6b7280",
   // Borders
   border:       "#e5e7eb",
-  // Status — budget rows
-  approved:     "#16a34a",
-  review:       "#d97706",
-  pending:      "#9ca3af",
-  // Status — gantt tasks
-  complete:     "#14b8a6",
-  inProgress:   "#f97316",
+  // Status (shared across budget + gantt)
+  approved:     "#10b981",
+  inReview:     "#f59e0b",
+  pending:      "#60a5fa",
 } as const;
 
 // ─── Page geometry ────────────────────────────────────────────────────────────
@@ -151,31 +148,31 @@ export const PDF_STYLES = {
 // ─── Status helpers ───────────────────────────────────────────────────────────
 
 export function budgetStatusColor(status: string): string {
-  if (status === "approved") return PDF_COLORS.approved;
-  if (status === "review")   return PDF_COLORS.review;
+  if (status === "approved")  return PDF_COLORS.approved;
+  if (status === "in-review") return PDF_COLORS.inReview;
   return PDF_COLORS.pending;
 }
 
 export function budgetStatusLabel(status: string, lang: "es" | "en"): string {
   const map: Record<string, Record<string, string>> = {
-    approved: { es: "Aprobado",  en: "Approved" },
-    review:   { es: "Revisión",  en: "Review"   },
-    pending:  { es: "Pendiente", en: "Pending"  },
+    approved:    { es: "Aprobado",    en: "Approved"     },
+    "in-review": { es: "En revisión", en: "Under Review" },
+    pending:     { es: "Pendiente",   en: "Pending"      },
   };
   return map[status]?.[lang] ?? status;
 }
 
 export function ganttStatusColor(status: string): string {
-  if (status === "complete")    return PDF_COLORS.complete;
-  if (status === "in-progress") return PDF_COLORS.inProgress;
+  if (status === "approved")  return PDF_COLORS.approved;
+  if (status === "in-review") return PDF_COLORS.inReview;
   return PDF_COLORS.pending;
 }
 
 export function ganttStatusLabel(status: string, lang: "es" | "en"): string {
   const map: Record<string, Record<string, string>> = {
-    complete:      { es: "Completo",  en: "Complete"    },
-    "in-progress": { es: "En curso",  en: "In progress" },
-    pending:       { es: "Pendiente", en: "Pending"     },
+    approved:    { es: "Aprobado",    en: "Approved"      },
+    "in-review": { es: "En revisión", en: "Under Review"  },
+    pending:     { es: "Pendiente",   en: "Pending"       },
   };
   return map[status]?.[lang] ?? status;
 }

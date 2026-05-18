@@ -218,6 +218,7 @@ export interface Database {
           id: string;
           project_id: string;
           apu_item_id: string | null;
+          budget_id: string | null;
           section: string;
           code: string | null;
           description: string;
@@ -225,15 +226,17 @@ export interface Database {
           quantity: number;
           unit_price: number;
           total: number; // generated column – read-only
-          status: "approved" | "review" | "pending";
+          status: "approved" | "in-review" | "pending";
           assignee: string | null;
           sort_order: number;
+          is_chapter: boolean;
           created_at: string;
         };
         Insert: {
           id?: string;
           project_id: string;
           apu_item_id?: string | null;
+          budget_id?: string | null;
           section: string;
           code?: string | null;
           description: string;
@@ -241,15 +244,17 @@ export interface Database {
           quantity?: number;
           unit_price?: number;
           // total is generated – omit on insert
-          status?: "approved" | "review" | "pending";
+          status?: "approved" | "in-review" | "pending";
           assignee?: string | null;
           sort_order?: number;
+          is_chapter?: boolean;
           created_at?: string;
         };
         Update: {
           id?: string;
           project_id?: string;
           apu_item_id?: string | null;
+          budget_id?: string | null;
           section?: string;
           code?: string | null;
           description?: string;
@@ -257,9 +262,10 @@ export interface Database {
           quantity?: number;
           unit_price?: number;
           // total is generated – omit on update
-          status?: "approved" | "review" | "pending";
+          status?: "approved" | "in-review" | "pending";
           assignee?: string | null;
           sort_order?: number;
+          is_chapter?: boolean;
         };
         Relationships: [
           {
@@ -330,7 +336,7 @@ export interface Database {
           start_week: number;
           duration_weeks: number;
           color: string;
-          status: "complete" | "in-progress" | "pending";
+          status: "approved" | "in-review" | "pending";
           progress_pct: number;
           parent_task_id: string | null;
           budget_section: string | null;
@@ -346,7 +352,7 @@ export interface Database {
           start_week?: number;
           duration_weeks?: number;
           color?: string;
-          status?: "complete" | "in-progress" | "pending";
+          status?: "approved" | "in-review" | "pending";
           progress_pct?: number;
           parent_task_id?: string | null;
           budget_section?: string | null;
@@ -362,7 +368,7 @@ export interface Database {
           start_week?: number;
           duration_weeks?: number;
           color?: string;
-          status?: "complete" | "in-progress" | "pending";
+          status?: "approved" | "in-review" | "pending";
           progress_pct?: number;
           parent_task_id?: string | null;
           budget_section?: string | null;
@@ -394,8 +400,8 @@ export interface Database {
       language: "es" | "en";
       currency_pref: "USD" | "MXN" | "COP";
       project_status: "active" | "archived" | "completed";
-      row_status: "approved" | "review" | "pending";
-      task_status: "complete" | "in-progress" | "pending";
+      row_status: "approved" | "in-review" | "pending";
+      task_status: "approved" | "in-review" | "pending";
     };
 
     CompositeTypes: Record<string, never>;

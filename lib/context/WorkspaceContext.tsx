@@ -12,6 +12,7 @@ import type { Locale } from "@/lib/utils/i18n";
 import type { TabId } from "@/components/workspace/TabBar";
 import {
   type ProjectIndirectCosts,
+  type BudgetRow,
   DEFAULT_INDIRECT_COSTS,
 } from "@/lib/types/database.types";
 
@@ -25,6 +26,8 @@ export interface WorkspaceCtx {
   userId: string;
   projectSettings: ProjectIndirectCosts;
   activeTab: TabId;
+  budgetRows: BudgetRow[];
+  setBudgetRows: React.Dispatch<React.SetStateAction<BudgetRow[]>>;
   setCurrency: (c: Currency) => void;
   setUnitSys: (u: "m" | "ft") => void;
   setLanguage: (l: Locale) => void;
@@ -46,6 +49,7 @@ export function WorkspaceProvider({
   initialLanguage,
   initialSettings,
   initialTab,
+  initialBudgetRows,
 }: {
   children: React.ReactNode;
   projectId: string;
@@ -54,9 +58,11 @@ export function WorkspaceProvider({
   initialLanguage: Locale;
   initialSettings?: ProjectIndirectCosts;
   initialTab?: TabId;
+  initialBudgetRows?: BudgetRow[];
 }) {
   const supabase = createClient();
 
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>(initialBudgetRows ?? []);
   const [currency, setCurrencyState] = useState<Currency>(initialCurrency);
   const [unitSys, setUnitSysState] = useState<"m" | "ft">("m");
   const [language, setLanguageState] = useState<Locale>(initialLanguage);
@@ -136,6 +142,8 @@ export function WorkspaceProvider({
         userId,
         projectSettings,
         activeTab,
+        budgetRows,
+        setBudgetRows,
         setCurrency,
         setUnitSys,
         setLanguage,

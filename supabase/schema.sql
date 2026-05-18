@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS budget_rows (
   id          UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
   project_id  UUID           NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   apu_item_id UUID           REFERENCES apu_items(id) ON DELETE SET NULL,
+  budget_id   UUID,
   section     TEXT           NOT NULL,
   code        TEXT,
   description TEXT           NOT NULL,
@@ -85,6 +86,7 @@ CREATE TABLE IF NOT EXISTS budget_rows (
   status      TEXT           DEFAULT 'pending' CHECK (status IN ('approved', 'in-review', 'pending')),
   assignee    TEXT,
   sort_order  INTEGER        DEFAULT 0,
+  is_chapter  BOOLEAN        DEFAULT false,
   created_at  TIMESTAMPTZ    DEFAULT NOW()
 );
 

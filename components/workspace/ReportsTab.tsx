@@ -202,7 +202,7 @@ export default function ReportsTab() {
     [budgetRows]
   );
 
-  const completedTasks = ganttTasks.filter((t) => t.status === "complete").length;
+  const completedTasks = ganttTasks.filter((t) => t.status === "approved").length;
   const avgProgress = ganttTasks.length > 0
     ? Math.round(ganttTasks.reduce((s, t) => s + (t.progress_pct ?? 0), 0) / ganttTasks.length)
     : 0;
@@ -821,9 +821,9 @@ export default function ReportsTab() {
         >
           <div className="grid grid-cols-3 gap-4 mb-4">
             {[
-              { status: "complete", label: lang === "es" ? "Completas" : "Complete", color: "#22c55e" },
-              { status: "in-progress", label: lang === "es" ? "En curso" : "In Progress", color: "#f97316" },
-              { status: "pending", label: lang === "es" ? "Pendientes" : "Pending", color: "#6b7280" },
+              { status: "approved", label: lang === "es" ? "Aprobado" : "Approved", color: "#10b981" },
+              { status: "in-review", label: lang === "es" ? "En revisión" : "Under Review", color: "#f59e0b" },
+              { status: "pending", label: lang === "es" ? "Pendiente" : "Pending", color: "#60a5fa" },
             ].map(({ status, label, color }) => {
               const count = ganttTasks.filter((t) => t.status === status).length;
               return (
@@ -842,9 +842,9 @@ export default function ReportsTab() {
           <div className="space-y-2.5 max-h-[300px] overflow-auto">
             {ganttTasks.slice(0, 8).map((task) => {
               const pct = task.progress_pct ?? 0;
-              const barColor = task.status === "complete" ? "#22c55e"
-                : task.status === "in-progress" ? "#f97316"
-                : "#6b7280";
+              const barColor = task.status === "approved" ? "#10b981"
+                : task.status === "in-review" ? "#f59e0b"
+                : "#60a5fa";
               return (
                 <div key={task.id} className="flex items-center gap-3">
                   <span className="text-xs text-[var(--cs-muted)] w-[140px] truncate flex-shrink-0">

@@ -35,7 +35,8 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
   }
 
   const displayName = fullName || user.email?.split("@")[0] || "User";
-  const isDark = theme !== "light";
+  // Use server-safe default until mounted to prevent hydration mismatch
+  const isDark = mounted ? theme !== "light" : true;
 
   return (
     <header
@@ -128,6 +129,7 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
         {/* Theme toggle */}
         <button
           onClick={toggleTheme}
+          suppressHydrationWarning
           aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
           title={isDark ? "Light mode" : "Dark mode"}
           className="flex items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"

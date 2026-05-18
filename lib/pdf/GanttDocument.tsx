@@ -230,7 +230,7 @@ export function GanttDocument({ project, tasks, language }: GanttDocumentProps) 
 
         {/* ── Legend ───────────────────────────────────────── */}
         <View style={S.legendRow}>
-          {(["complete", "in-progress", "pending"] as const).map((s) => (
+          {(["approved", "in-review", "pending"] as const).map((s) => (
             <View key={s} style={S.legendItem}>
               <View style={[S.legendDot, { backgroundColor: getStatusColor(s) }]} />
               <Text style={S.legendText}>{getStatusLabel(s, language)}</Text>
