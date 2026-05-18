@@ -1700,37 +1700,41 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   // ── Inline cell save ──────────────────────────────────────────────────────
   const handleCellSave = useCallback(
     async (rowId: string, field: EditableField, rawVal: string) => {
-      // Build a minimal patch with ONLY the single column being changed.
-      // Only valid budget_rows columns: section, code, description, unit,
-      // quantity, unit_price, status, assignee, sort_order, is_chapter
-      let patch: Record<string, string | number | null> | null = null;
-      switch (field) {
-        case "code":       patch = { code: rawVal.trim() || null }; break;
-        case "description": patch = { description: rawVal.trim() || "" }; break;
-        case "unit":       patch = { unit: rawVal.trim() || null }; break;
-        case "quantity":   patch = { quantity: parseFloat(rawVal) || 0 }; break;
-        case "unit_price": patch = { unit_price: parseFloat(rawVal) || 0 }; break;
-        case "status":     patch = { status: rawVal }; break;
-        case "assignee":   patch = { assignee: rawVal.trim() || null }; break;
-      }
-      if (!patch) return;
-
       // Optimistic update
       const prevRows = rows;
       setRows((prev) => prev.map((r) => {
         if (r.id !== rowId) return r;
-        const next = { ...r, ...patch };
-        next.total = next.quantity * next.unit_price;
+        const next = { ...r };
+        if (field === "code")       next.code = rawVal.trim() || null;
+        if (field === "description") next.description = rawVal.trim() || "";
+        if (field === "unit")       next.unit = rawVal.trim() || null;
+        if (field === "quantity")   { next.quantity = parseFloat(rawVal) || 0; next.total = next.quantity * next.unit_price; }
+        if (field === "unit_price") { next.unit_price = parseFloat(rawVal) || 0; next.total = next.quantity * next.unit_price; }
+        if (field === "status")     next.status = rawVal as StatusKey;
+        if (field === "assignee")   next.assignee = rawVal.trim() || null;
         return next;
       }));
 
-      const { error } = await supabase
-        .from("budget_rows")
-        .update(patch as BudgetRowUpdate)
-        .eq("id", rowId);
+      // Send ONLY the single field being updated — nothing else
+      let error: { message: string } | null = null;
+      if (field === "status") {
+        ({ error } = await supabase.from("budget_rows").update({ status: rawVal as "pending" | "in-review" | "approved" }).eq("id", rowId));
+      } else if (field === "code") {
+        ({ error } = await supabase.from("budget_rows").update({ code: rawVal.trim() || null }).eq("id", rowId));
+      } else if (field === "description") {
+        ({ error } = await supabase.from("budget_rows").update({ description: rawVal.trim() || "" }).eq("id", rowId));
+      } else if (field === "unit") {
+        ({ error } = await supabase.from("budget_rows").update({ unit: rawVal.trim() || null }).eq("id", rowId));
+      } else if (field === "quantity") {
+        ({ error } = await supabase.from("budget_rows").update({ quantity: parseFloat(rawVal) || 0 }).eq("id", rowId));
+      } else if (field === "unit_price") {
+        ({ error } = await supabase.from("budget_rows").update({ unit_price: parseFloat(rawVal) || 0 }).eq("id", rowId));
+      } else if (field === "assignee") {
+        ({ error } = await supabase.from("budget_rows").update({ assignee: rawVal.trim() || null }).eq("id", rowId));
+      }
+
       if (error) {
-        console.error("[budget_rows PATCH error]", { rowId, field, patch, error });
-        // Revert on failure
+        console.error("[budget_rows PATCH error]", { rowId, field, rawVal, error });
         setRows(prevRows);
         toast(lang === "es" ? "Error al guardar" : "Failed to save", "error");
         return;
