@@ -1700,14 +1700,20 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   // ── Inline cell save ──────────────────────────────────────────────────────
   const handleCellSave = useCallback(
     async (rowId: string, field: EditableField, rawVal: string) => {
-      let patch: BudgetRowUpdate = {};
-      if (field === "code")       patch = { code: rawVal.trim() || null };
-      if (field === "description") patch = { description: rawVal.trim() || "" };
-      if (field === "unit")       patch = { unit: rawVal.trim() || null };
-      if (field === "quantity")   patch = { quantity: parseFloat(rawVal) || 0 };
-      if (field === "unit_price") patch = { unit_price: parseFloat(rawVal) || 0 };
-      if (field === "status")     patch = { status: rawVal as StatusKey };
-      if (field === "assignee")   patch = { assignee: rawVal.trim() || null };
+      // Build a minimal patch with ONLY the single column being changed.
+      // Only valid budget_rows columns: section, code, description, unit,
+      // quantity, unit_price, status, assignee, sort_order, is_chapter
+      let patch: Record<string, string | number | null> | null = null;
+      switch (field) {
+        case "code":       patch = { code: rawVal.trim() || null }; break;
+        case "description": patch = { description: rawVal.trim() || "" }; break;
+        case "unit":       patch = { unit: rawVal.trim() || null }; break;
+        case "quantity":   patch = { quantity: parseFloat(rawVal) || 0 }; break;
+        case "unit_price": patch = { unit_price: parseFloat(rawVal) || 0 }; break;
+        case "status":     patch = { status: rawVal }; break;
+        case "assignee":   patch = { assignee: rawVal.trim() || null }; break;
+      }
+      if (!patch) return;
 
       // Optimistic update
       const prevRows = rows;
@@ -1718,8 +1724,12 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         return next;
       }));
 
-      const { error } = await supabase.from("budget_rows").update(patch).eq("id", rowId);
+      const { error } = await supabase
+        .from("budget_rows")
+        .update(patch as BudgetRowUpdate)
+        .eq("id", rowId);
       if (error) {
+        console.error("[budget_rows PATCH error]", { rowId, field, patch, error });
         // Revert on failure
         setRows(prevRows);
         toast(lang === "es" ? "Error al guardar" : "Failed to save", "error");
