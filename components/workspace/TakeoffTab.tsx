@@ -3,6 +3,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Plus, Trash2, Loader2, X, Download, ArrowRight, GripVertical, ClipboardPaste, FileText, Search } from "lucide-react";
 import {
+  ToolbarPortal, ToolbarGroup, ToolbarSep,
+  TBtn, TBtnPrimary,
+} from "@/components/workspace/ContextualToolbar";
+import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor,
   useSensor, useSensors, type DragEndEvent,
 } from "@dnd-kit/core";
@@ -1106,6 +1110,27 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
   }
 
   return (
+    <>
+    <ToolbarPortal>
+      <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
+        <TBtn onClick={handleExportCSV} disabled={items.length === 0}>
+          <Download className="h-3.5 w-3.5" /> CSV
+        </TBtn>
+        <TBtn onClick={handlePrintTakeoff} disabled={items.length === 0}>
+          <FileText className="h-3.5 w-3.5" /> PDF
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <ToolbarGroup label={lang === "es" ? "Herramientas" : "Tools"}>
+        <TBtn onClick={() => setShowPaste(true)}>
+          <ClipboardPaste className="h-3.5 w-3.5" /> {lang === "es" ? "Importar cantidades" : "Import quantities"}
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <TBtnPrimary onClick={() => setShowAdd(true)}>
+        <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "Nueva partida" : "New item"}
+      </TBtnPrimary>
+    </ToolbarPortal>
     <div className="flex flex-col gap-4">
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1177,97 +1202,7 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
             {lang === "es" ? "Enviar todo" : "Send all"}
           </button>
 
-          {/* Export CSV */}
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            disabled={items.length === 0}
-            aria-label={lang === "es" ? "Exportar CSV" : "Export CSV"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: items.length === 0 ? "not-allowed" : "pointer",
-              opacity: items.length === 0 ? 0.45 : 1,
-            }}
-            onMouseEnter={(e) => { if (items.length > 0) (e.currentTarget as HTMLButtonElement).style.color = CS.text; }}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "Exportar CSV" : "Export CSV"}
-          </button>
-
-          {/* Print PDF */}
-          <button
-            type="button"
-            onClick={handlePrintTakeoff}
-            disabled={items.length === 0}
-            aria-label={lang === "es" ? "Imprimir PDF" : "Print PDF"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: items.length === 0 ? "not-allowed" : "pointer",
-              opacity: items.length === 0 ? 0.45 : 1,
-            }}
-            onMouseEnter={(e) => { if (items.length > 0) (e.currentTarget as HTMLButtonElement).style.color = CS.text; }}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
-            <FileText className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "Imprimir" : "Print"}
-          </button>
-
-          {/* Paste from Excel */}
-          <button
-            type="button"
-            onClick={() => setShowPaste(true)}
-            aria-label={lang === "es" ? "Pegar desde Excel" : "Paste from Excel"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: "pointer",
-            }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
-            <ClipboardPaste className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "Pegar Excel" : "Paste Excel"}
-          </button>
-
-          {/* Clear */}
-          <button
-            type="button"
-            onClick={() => setShowClear(true)}
-            disabled={items.length === 0}
-            aria-label={lang === "es" ? "Limpiar tabla" : "Clear table"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: items.length === 0 ? CS.muted : "#ef4444",
-              cursor: items.length === 0 ? "not-allowed" : "pointer",
-              opacity: items.length === 0 ? 0.45 : 1,
-            }}
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "Limpiar" : "Clear"}
-          </button>
-
-          {/* Add element */}
-          <button
-            type="button"
-            onClick={() => setShowAdd(true)}
-            aria-label={lang === "es" ? "Agregar elemento" : "Add element"}
-            className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "+ Agregar elemento" : "+ Add element"}
-          </button>
+          {/* Buttons moved to ContextualToolbar via portal */}
         </div>
       </div>
 
@@ -1476,5 +1411,6 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
         );
       })()}
     </div>
+    </>
   );
 }
