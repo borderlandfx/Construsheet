@@ -470,7 +470,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   const [movingId, setMovingId]         = useState<string | null>(null);
   const [zoomStep, _setZoomStep]        = useState(0);
   const [viewMode, setViewMode]        = useState<"weeks" | "months">("weeks");
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const [expandedChapters, setExpandedChapters] = useState<string[]>([]);
 
   // ── Load on mount ───────────────────────────────────────────────────────────
   // Pure read — the DB trigger on budget_rows creates gantt_tasks automatically.
@@ -484,7 +484,10 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         .eq("project_id", projectId)
         .order("sort_order");
       if (cancelled) return;
-      setTasks(((data ?? []) as GanttTask[]).sort((a, b) => a.sort_order - b.sort_order));
+      const loaded = ((data ?? []) as GanttTask[]).sort((a, b) => a.sort_order - b.sort_order);
+      setTasks(loaded);
+      // Default: all chapters expanded
+      setExpandedChapters(loaded.filter((t) => !!t.is_chapter).map((t) => t.id));
       setLoading(false);
     }
     load();
@@ -492,11 +495,9 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleCollapse(id: string) {
-    setCollapsedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
+    setExpandedChapters((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   }
 
   // Resize state stored in refs to avoid stale closures in document listeners
@@ -520,28 +521,10 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   // Ref to the timeline header for measuring px-per-week
   const timelineHeaderRef = useRef<HTMLDivElement>(null);
 
-  // Build ordered list: parents first (by sort_order), then their children
-  const orderedTasks = (() => {
-    const parents = tasks.filter((t) => !t.parent_task_id).sort((a, b) => a.sort_order - b.sort_order);
-    const result: GanttTask[] = [];
-    for (const p of parents) {
-      result.push(p);
-      const children = tasks.filter((t) => t.parent_task_id === p.id).sort((a, b) => a.sort_order - b.sort_order);
-      result.push(...children);
-    }
-    // Include orphan tasks (no parent_task_id and no children pointing to them)
-    const inResult = new Set(result.map((t) => t.id));
-    for (const t of tasks) {
-      if (!inResult.has(t.id)) result.push(t);
-    }
-    return result;
-  })();
-
-  // Filter out children of collapsed parents
-  const visibleTasks = orderedTasks.filter((t) => {
-    if (!t.parent_task_id) return true;
-    return !collapsedIds.has(t.parent_task_id);
-  });
+  // Chapters (is_chapter=true) sorted by sort_order, children grouped under them
+  const chapterTasks = tasks.filter((t) => !!t.is_chapter).sort((a, b) => a.sort_order - b.sort_order);
+  // Orphan tasks: not a chapter and no parent_task_id
+  const orphanTasks = tasks.filter((t) => !t.is_chapter && !t.parent_task_id).sort((a, b) => a.sort_order - b.sort_order);
 
   const totalWeeks = Math.max(
     MIN_WEEKS,
@@ -598,6 +581,10 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
               toast(lang === "es" ? "Nueva tarea en tiempo real" : "New task received", "info");
               return [...prev, newTask].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
             });
+            // Auto-expand new chapters
+            if (newTask.is_chapter) {
+              setExpandedChapters((prev) => prev.includes(newTask.id) ? prev : [...prev, newTask.id]);
+            }
           } else if (payload.eventType === "UPDATE") {
             const updated = payload.new as GanttTask;
             setTasks((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -1089,36 +1076,85 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
             <div style={{ width: ACTION_W, flexShrink: 0 }} />
           </div>
 
-          {/* Rows — static list ordered by budget sort_order */}
-          {visibleTasks.map((task) => {
-            const isParent = task.is_chapter || (!task.parent_task_id && tasks.some((t) => t.parent_task_id === task.id));
-            const isChild = !!task.parent_task_id;
-            const childCount = isParent ? tasks.filter((t) => t.parent_task_id === task.id).length : 0;
+          {/* Chapter rows + their children */}
+          {chapterTasks.map((chapter) => {
+            const children = tasks
+              .filter((t) => t.parent_task_id === chapter.id)
+              .sort((a, b) => a.sort_order - b.sort_order);
+            const isExpanded = expandedChapters.includes(chapter.id);
             return (
-              <SortableGanttRow
-                key={task.id}
-                task={task}
-                totalWeeks={totalWeeks}
-                todayPct={todayPct}
-                language={lang}
-                isResizing={resizingId === task.id}
-                isMoving={movingId === task.id}
-                projectStart={projectStart}
-                timelineMinPx={timelineMinPx}
-                isParent={isParent}
-                isChild={isChild}
-                isCollapsed={collapsedIds.has(task.id)}
-                childCount={childCount}
-                onToggleCollapse={() => toggleCollapse(task.id)}
-                onDelete={handleDelete}
-                onDuplicate={handleDuplicateTask}
-                onProgressCycle={handleProgressCycle}
-                onResizeStart={handleResizeStart}
-                onMoveStart={handleMoveStart}
-                onEdit={setEditingTask}
-              />
+              <div key={chapter.id}>
+                <SortableGanttRow
+                  task={chapter}
+                  totalWeeks={totalWeeks}
+                  todayPct={todayPct}
+                  language={lang}
+                  isResizing={resizingId === chapter.id}
+                  isMoving={movingId === chapter.id}
+                  projectStart={projectStart}
+                  timelineMinPx={timelineMinPx}
+                  isParent
+                  isChild={false}
+                  isCollapsed={!isExpanded}
+                  childCount={children.length}
+                  onToggleCollapse={() => toggleCollapse(chapter.id)}
+                  onDelete={handleDelete}
+                  onDuplicate={handleDuplicateTask}
+                  onProgressCycle={handleProgressCycle}
+                  onResizeStart={handleResizeStart}
+                  onMoveStart={handleMoveStart}
+                  onEdit={setEditingTask}
+                />
+                {isExpanded && children.map((child) => (
+                  <SortableGanttRow
+                    key={child.id}
+                    task={child}
+                    totalWeeks={totalWeeks}
+                    todayPct={todayPct}
+                    language={lang}
+                    isResizing={resizingId === child.id}
+                    isMoving={movingId === child.id}
+                    projectStart={projectStart}
+                    timelineMinPx={timelineMinPx}
+                    isParent={false}
+                    isChild
+                    isCollapsed={false}
+                    childCount={0}
+                    onDelete={handleDelete}
+                    onDuplicate={handleDuplicateTask}
+                    onProgressCycle={handleProgressCycle}
+                    onResizeStart={handleResizeStart}
+                    onMoveStart={handleMoveStart}
+                    onEdit={setEditingTask}
+                  />
+                ))}
+              </div>
             );
           })}
+          {/* Orphan tasks (no chapter, no parent) */}
+          {orphanTasks.map((task) => (
+            <SortableGanttRow
+              key={task.id}
+              task={task}
+              totalWeeks={totalWeeks}
+              todayPct={todayPct}
+              language={lang}
+              isResizing={resizingId === task.id}
+              isMoving={movingId === task.id}
+              projectStart={projectStart}
+              timelineMinPx={timelineMinPx}
+              isParent={false}
+              isChild={false}
+              isCollapsed={false}
+              childCount={0}
+              onDelete={handleDelete}
+              onDuplicate={handleDuplicateTask}
+              onProgressCycle={handleProgressCycle}
+              onResizeStart={handleResizeStart}
+              onMoveStart={handleMoveStart}
+              onEdit={setEditingTask}
+            />
+          ))}
         </div>
       )}
 
