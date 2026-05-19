@@ -258,12 +258,23 @@ function AddItemModal({ projectId, language, sections, rowCount, fmt, prefill, o
     if (!effectiveSec || !description.trim()) return;
     setSaving(true);
     try {
+      // If creating a brand-new chapter, insert a chapter header row first
+      if (section === "__new__" && effectiveSec) {
+        const chapterPayload: BudgetRowInsert = {
+          project_id: projectId, section: effectiveSec,
+          description: effectiveSec, is_chapter: true,
+          code: null, quantity: 0, unit_price: 0,
+          sort_order: rowCount + savedCount, status: "pending",
+        };
+        const { data: chapterData } = await supabase.from("budget_rows").insert(chapterPayload).select().single();
+        if (chapterData) onSaved(chapterData as BudgetRow);
+      }
       const payload: BudgetRowInsert = {
         project_id: projectId, section: effectiveSec,
         description: description.trim(), code: code.trim() || null,
         unit: unit.trim() || null, quantity: parseFloat(quantity) || 0,
         unit_price: parseFloat(unitPrice) || 0, status, assignee: assignee.trim() || null,
-        sort_order: rowCount + savedCount,
+        sort_order: rowCount + savedCount + (section === "__new__" ? 1 : 0),
       };
       const { data, error } = await supabase.from("budget_rows").insert(payload).select().single();
       if (error) {
@@ -620,6 +631,18 @@ function PasteBudgetModal({ projectId, language, sections, rowCount, onSaved, on
   async function handleImport() {
     if (!parsed.length || !effectiveSec) return;
     setSaving(true);
+    let offset = 0;
+    // If creating a new chapter, insert a chapter header row first
+    if (section === "__new__" && effectiveSec) {
+      const chapterPayload: BudgetRowInsert = {
+        project_id: projectId, section: effectiveSec,
+        description: effectiveSec, is_chapter: true,
+        code: null, quantity: 0, unit_price: 0,
+        sort_order: rowCount, status: "pending",
+      };
+      await supabase.from("budget_rows").insert(chapterPayload);
+      offset = 1;
+    }
     const payloads: BudgetRowInsert[] = parsed.map((row, i) => ({
       project_id:  projectId,
       section:     effectiveSec,
@@ -629,7 +652,7 @@ function PasteBudgetModal({ projectId, language, sections, rowCount, onSaved, on
       unit_price:  row.unit_price,
       code:        row.code,
       status:      "pending" as const,
-      sort_order:  rowCount + i,
+      sort_order:  rowCount + offset + i,
     }));
     const { data, error } = await supabase.from("budget_rows").insert(payloads).select();
     setSaving(false);
@@ -1775,6 +1798,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
       section:     source.section,
       code:        source.code ?? undefined,
       description: source.description,
+      is_chapter:  source.is_chapter,
       unit:        source.unit ?? undefined,
       quantity:    source.quantity,
       unit_price:  source.unit_price,
@@ -1849,7 +1873,9 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     const newName = `${clipboard} (copia)`;
     const payloads: BudgetRowInsert[] = srcRows.map((r, i) => ({
       project_id: projectId, apu_item_id: r.apu_item_id,
-      section: newName, code: r.code, description: r.description,
+      section: newName, code: r.code,
+      description: r.is_chapter ? newName : r.description,
+      is_chapter: r.is_chapter,
       unit: r.unit, quantity: r.quantity, unit_price: r.unit_price,
       status: r.status, assignee: r.assignee, sort_order: rows.length + i,
     }));
@@ -1875,10 +1901,10 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   async function handleNewGroup() {
     if (!newGroupName.trim()) { setNewGroupModal(false); return; }
     const trimmedName = newGroupName.trim();
-    // Create a placeholder row for the new empty group — use a descriptive name so it's not filtered as ghost
+    // Create a chapter header row with is_chapter=true
     const payload: BudgetRowInsert = {
       project_id: projectId, section: trimmedName,
-      description: lang === "es" ? "Nueva partida" : "New item",
+      description: trimmedName, is_chapter: true,
       code: null, quantity: 0, unit_price: 0,
       sort_order: rows.length, status: "pending",
     };
@@ -2348,14 +2374,14 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
               <SortableContext items={sections.map((s) => `chapter:${s}`)} strategy={verticalListSortingStrategy}>
                   <tbody>
                     {sections.map((sec, secIdx) => {
-                      const secRows = rows.filter((r) => r.section === sec)
+                      const secRows = rows.filter((r) => r.section === sec && !r.is_chapter)
                         .sort((a, b) => a.sort_order - b.sort_order);
                       // When a filter is active, skip sections that have no visible rows
                       if (filteredIds !== null && !secRows.some((r) => filteredIds.has(r.id))) return null;
                       const visibleRows = filteredIds !== null ? secRows.filter((r) => filteredIds.has(r.id)) : secRows;
                       const secTotal = visibleRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
                       const secStartNum = sections.slice(0, secIdx).reduce(
-                        (acc, s) => acc + rows.filter((r) => r.section === s).length, 0
+                        (acc, s) => acc + rows.filter((r) => r.section === s && !r.is_chapter).length, 0
                       );
 
                       return (
