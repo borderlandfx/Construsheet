@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Trash2, Loader2, X,
-  Download, ZoomIn, ZoomOut, Copy, ChevronRight, ChevronDown, Link2,
+  Download, Copy, ChevronRight, ChevronDown,
   FileText, LayoutList, CalendarDays, Lock,
 } from "lucide-react";
 import {
@@ -603,7 +603,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [resizingId, setResizingId]     = useState<string | null>(null);
   const [movingId, setMovingId]         = useState<string | null>(null);
-  const [zoomStep, setZoomStep]         = useState(0);
+  const [zoomStep, _setZoomStep]        = useState(0);
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   // ── Load on mount ───────────────────────────────────────────────────────────

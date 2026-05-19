@@ -6,7 +6,7 @@ import {
 import {
   Plus, Trash2, Loader2, X, Search, Import, BookOpen,
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
-  FileText, Filter, ArrowDownToLine, TableIcon,
+  FileText, ArrowDownToLine,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
