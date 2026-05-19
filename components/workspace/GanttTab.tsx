@@ -64,8 +64,8 @@ const LBL: React.CSSProperties = {
 };
 
 // Left panel width — must match in both header and rows
-const LEFT_W = 240;
-const ACTION_W = 64;
+const LEFT_W = 280;
+const ACTION_W = 56;
 
 // Zoom: minimum pixels per week column (0 = auto-fit)
 const ZOOM_STEPS = [0, 22, 32, 48, 68, 96] as const;
@@ -159,9 +159,16 @@ function SortableGanttRow({
 }: SortableGanttRowProps) {
 
   const statusCfg = STATUS_CFG[task.status as StatusKey] ?? STATUS_CFG.pending;
-  const color = task.color ?? BAR_COLORS[0];
+  const barColor = isParent ? "#f97316" : "#3b82f6";
+  const barHeight = isParent ? 20 : 14;
+  const rowH = isParent ? 36 : 34;
 
-  // Compute actual start/end dates for tooltip
+  // Bar geometry (clamped so it can't overflow)
+  const startPct = Math.min(((task.start_week - 1) / totalWeeks) * 100, 95);
+  const maxWidth = 100 - startPct;
+  const widthPct = Math.min((task.duration_weeks / totalWeeks) * 100, maxWidth);
+
+  // Tooltip date range
   const barStartDate = new Date(projectStart);
   barStartDate.setDate(barStartDate.getDate() + (task.start_week - 1) * 7);
   const barEndDate = new Date(projectStart);
@@ -170,265 +177,123 @@ function SortableGanttRow({
   const fmtDate = (d: Date) => d.toLocaleDateString(dateLocale, { day: "numeric", month: "short" });
   const barDateRange = `${fmtDate(barStartDate)} – ${fmtDate(barEndDate)}`;
 
-  // Bar geometry (clamped so it can't overflow)
-  const startPct = Math.min(
-    ((task.start_week - 1) / totalWeeks) * 100,
-    95
-  );
-  const maxWidth = 100 - startPct;
-  const widthPct = Math.min(
-    (task.duration_weeks / totalWeeks) * 100,
-    maxWidth
-  );
-
   return (
     <div
-      style={{
-        borderBottom: isParent
-          ? `1px solid rgba(249,115,22,0.15)`
-          : `1px solid ${CS.border}`,
-        position: "relative",
-      }}
-      className="group flex items-center"
+      style={{ borderBottom: "0.5px solid #1e2230", position: "relative", background: isParent ? "#161921" : undefined }}
+      className="group flex items-center hover:bg-white/[0.02]"
       data-testid={`gantt-row-${task.id}`}
     >
       {/* ── Left panel ──────────────────── */}
       <div
-        className="flex items-center gap-1.5 shrink-0"
+        className="flex items-center gap-2 shrink-0"
         style={{
-          width: LEFT_W,
-          minWidth: LEFT_W,
-          borderRight: `1px solid ${CS.border}`,
-          padding: "6px 8px 6px 4px",
-          paddingLeft: isChild ? 24 : 4,
-          minHeight: isParent ? 40 : 44,
-          background: isParent ? "rgba(249,115,22,0.04)" : undefined,
+          width: LEFT_W, minWidth: LEFT_W, borderRight: "0.5px solid #1e2230",
+          padding: "6px 8px", paddingLeft: isChild ? 32 : 8, minHeight: rowH,
         }}
       >
-        {/* Collapse toggle for parents */}
+        {/* Collapse toggle for chapters */}
         {isParent ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="flex items-center justify-center rounded shrink-0"
-            style={{
-              width: 20, height: 20,
-              background: "none", border: "none",
-              cursor: "pointer", color: CS.accent,
-            }}
-            aria-label={isCollapsed ? "Expand" : "Collapse"}
-          >
+          <button type="button" onClick={onToggleCollapse}
+            className="flex items-center justify-center shrink-0"
+            style={{ width: 18, height: 18, background: "none", border: "none", cursor: "pointer", color: "#f97316" }}
+            aria-label={isCollapsed ? "Expand" : "Collapse"}>
             {isCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           </button>
         ) : (
-          <div style={{ width: 20, height: 20 }} />
+          <span className="shrink-0 rounded-full" style={{ width: 7, height: 7, background: statusCfg.color }} />
         )}
 
-        {/* Status pill — read-only, synced from Budget tab */}
-        <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium font-dm-sans"
-          style={{
-            background: `${statusCfg.color}33`,
-            color: statusCfg.color,
-            whiteSpace: "nowrap",
-            lineHeight: 1.5,
-          }}
-        >
-          <span
-            className="inline-block rounded-full mr-1"
-            style={{ width: 5, height: 5, background: statusCfg.color, verticalAlign: "middle" }}
-          />
-          {statusCfg.label[language]}
-        </span>
-
         {/* Task name — click to edit */}
-        <button
-          type="button"
-          onClick={() => onEdit(task)}
-          className={`text-sm font-dm-sans flex-1 truncate text-left ${isParent ? "font-bold uppercase" : ""}`}
+        <button type="button" onClick={() => onEdit(task)}
+          className={`font-dm-sans flex-1 truncate text-left ${isParent ? "font-bold uppercase" : ""}`}
           style={{
-            color: isParent ? CS.accent : CS.text,
-            minWidth: 0, background: "none", border: "none",
-            cursor: "pointer", padding: 0,
-            fontSize: isParent ? "0.7rem" : undefined,
+            color: isParent ? "#f97316" : CS.text, minWidth: 0, background: "none", border: "none",
+            cursor: "pointer", padding: 0, fontSize: isParent ? 11 : 12,
             letterSpacing: isParent ? "0.04em" : undefined,
           }}
-          title={language === "es" ? "Clic para editar" : "Click to edit"}
-        >
+          title={language === "es" ? "Clic para editar" : "Click to edit"}>
           {task.name}
           {isParent && childCount !== undefined && childCount > 0 && (
-            <span style={{ fontWeight: 400, fontSize: "0.65rem", marginLeft: 6, opacity: 0.6 }}>
-              ({childCount})
-            </span>
+            <span style={{ fontWeight: 400, fontSize: 10, marginLeft: 6, opacity: 0.5 }}>({childCount})</span>
           )}
         </button>
 
         {/* Progress badge — click cycles through 0/25/50/75/100 */}
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onProgressCycle(task.id); }}
+        <button type="button" onClick={(e) => { e.stopPropagation(); onProgressCycle(task.id); }}
           className="shrink-0 font-dm-sans rounded"
-          style={{
-            fontSize: "0.65rem",
-            fontWeight: 600,
-            padding: "1px 5px",
-            background: `${(task.color ?? BAR_COLORS[0])}22`,
-            color: task.color ?? BAR_COLORS[0],
-            border: "none",
-            cursor: "pointer",
-            lineHeight: 1.6,
-          }}
-          title={language === "es" ? "Clic para cambiar avance" : "Click to cycle progress"}
-        >
+          style={{ fontSize: 10, fontWeight: 600, padding: "1px 5px", background: `${barColor}22`, color: barColor, border: "none", cursor: "pointer", lineHeight: 1.5 }}
+          title={language === "es" ? "Clic para cambiar avance" : "Click to cycle progress"}>
           {task.progress_pct ?? 0}%
         </button>
       </div>
 
       {/* ── Timeline panel ──────────────── */}
-      <div
-        className="relative flex-1"
-        style={{ height: 44, minWidth: timelineMinPx > 0 ? timelineMinPx : 0, overflow: "hidden" }}
-      >
-        {/* Week grid lines */}
-        {Array.from({ length: totalWeeks + 1 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute top-0 bottom-0 pointer-events-none"
+      <div className="relative flex-1" style={{ height: rowH, minWidth: timelineMinPx > 0 ? timelineMinPx : 0, overflow: "hidden" }}>
+        {/* Alternating column backgrounds + grid lines */}
+        {Array.from({ length: totalWeeks }).map((_, i) => (
+          <div key={i} className="absolute top-0 bottom-0 pointer-events-none"
             style={{
               left: `${(i / totalWeeks) * 100}%`,
-              width: 1,
-              background:
-                i % 4 === 0
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(255,255,255,0.022)",
-            }}
-          />
+              width: `${(1 / totalWeeks) * 100}%`,
+              background: i % 2 === 0 ? "#0d1117" : "#0f1117",
+              borderRight: "0.5px solid #1e2230",
+            }} />
         ))}
 
         {/* Task bar */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 rounded flex items-center overflow-hidden select-none"
+          className="absolute top-1/2 -translate-y-1/2 flex items-center overflow-hidden select-none"
           title={barDateRange}
-          onMouseDown={(e) => {
-            // Only left-button, not on the resize handle (handled separately)
-            if (e.button !== 0) return;
-            onMoveStart(e, task);
-          }}
+          onMouseDown={(e) => { if (e.button !== 0) return; onMoveStart(e, task); }}
           style={{
-            left: `${startPct}%`,
-            width: `${widthPct}%`,
-            height: isParent ? 20 : 26,
-            minWidth: 4,
-            background: color,
-            opacity: task.status === "approved" ? 0.6 : isParent ? 0.75 : 1,
+            left: `${startPct}%`, width: `${widthPct}%`, height: barHeight, minWidth: 4,
+            background: barColor, borderRadius: 4, zIndex: 2,
             cursor: isMoving ? "grabbing" : "grab",
-            borderRadius: isParent ? 3 : undefined,
-            boxShadow: (isResizing || isMoving)
-              ? `0 0 0 2px ${color}, 0 0 0 4px rgba(255,255,255,0.12)`
-              : "none",
+            opacity: task.status === "approved" ? 0.7 : 1,
+            boxShadow: (isResizing || isMoving) ? `0 0 0 2px ${barColor}, 0 0 0 4px rgba(255,255,255,0.1)` : "none",
             transition: (isResizing || isMoving) ? "none" : "width 0.1s ease, left 0.1s ease",
           }}
         >
           {/* Progress fill overlay */}
           {(task.progress_pct ?? 0) > 0 && (
-            <div
-              className="absolute inset-y-0 left-0 pointer-events-none"
-              style={{
-                width: `${task.progress_pct ?? 0}%`,
-                background: "rgba(255,255,255,0.22)",
-                transition: (isResizing || isMoving) ? "none" : "width 0.3s ease",
-              }}
-            />
+            <div className="absolute inset-y-0 left-0 pointer-events-none"
+              style={{ width: `${task.progress_pct}%`, background: "rgba(255,255,255,0.2)", transition: (isResizing || isMoving) ? "none" : "width 0.3s ease" }} />
           )}
-
-          {/* Date label inside bar */}
-          {widthPct > 7 && (
-            <span
-              className="pl-2 text-white truncate"
-              style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: "0.01em", pointerEvents: "none", position: "relative" }}
-              title={barDateRange}
-            >
-              {widthPct > 16 ? barDateRange : `S${task.start_week}`}
-              {(task.progress_pct ?? 0) > 0 && (task.progress_pct ?? 0) < 100 && widthPct > 20 && (
-                <span style={{ marginLeft: 4, opacity: 0.85 }}>{task.progress_pct}%</span>
-              )}
+          {/* Duration label inside bar */}
+          {widthPct > 5 && (
+            <span className="pl-1.5 text-white truncate"
+              style={{ fontSize: 9, fontWeight: 600, pointerEvents: "none", position: "relative" }}>
+              {task.duration_weeks}{language === "es" ? "s" : "w"}
             </span>
           )}
-
-          {/* Resize handle — right edge of bar */}
-          <div
-            onMouseDown={(e) => { e.stopPropagation(); onResizeStart(e, task); }}
+          {/* Resize handle — right edge */}
+          <div onMouseDown={(e) => { e.stopPropagation(); onResizeStart(e, task); }}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center"
-            style={{
-              width: 9,
-              cursor: "ew-resize",
-              background: "rgba(0,0,0,0.18)",
-              borderRadius: "0 4px 4px 0",
-              flexShrink: 0,
-            }}
-            title={
-              language === "es"
-                ? "Arrastrar para redimensionar"
-                : "Drag to resize"
-            }
-          >
-            <div
-              style={{
-                width: 2, height: 12,
-                background: "rgba(255,255,255,0.45)",
-                borderRadius: 2,
-              }}
-            />
+            style={{ width: 8, cursor: "ew-resize", background: "rgba(0,0,0,0.15)", borderRadius: "0 4px 4px 0", flexShrink: 0 }}>
+            <div style={{ width: 1.5, height: Math.max(barHeight - 6, 4), background: "rgba(255,255,255,0.4)", borderRadius: 2 }} />
           </div>
         </div>
 
         {/* Today line in row */}
         {todayPct !== null && (
-          <div
-            className="absolute top-0 bottom-0 pointer-events-none"
-            style={{
-              left: `${todayPct}%`,
-              width: 2,
-              background: CS.accent,
-              opacity: 0.45,
-            }}
-          />
+          <div className="absolute top-0 bottom-0 pointer-events-none"
+            style={{ left: `${todayPct}%`, width: 2, background: CS.accent, opacity: 0.4, zIndex: 3 }} />
         )}
       </div>
 
       {/* ── Row actions ──────────────────── */}
-      <div
-        className="shrink-0 flex items-center justify-center gap-0.5"
-        style={{ width: ACTION_W, height: 44 }}
-      >
-        {/* Duplicate */}
-        <button
-          type="button"
-          onClick={() => onDuplicate(task)}
+      <div className="shrink-0 flex items-center justify-center gap-0.5" style={{ width: ACTION_W, height: rowH }}>
+        <button type="button" onClick={() => onDuplicate(task)}
           className="flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{
-            width: 24, height: 24,
-            background: "none", border: "none",
-            cursor: "pointer", color: CS.muted,
-          }}
-          aria-label={language === "es" ? "Duplicar tarea" : "Duplicate task"}
-          title={language === "es" ? "Duplicar" : "Duplicate"}
-        >
-          <Copy className="h-3.5 w-3.5" />
+          style={{ width: 22, height: 22, background: "none", border: "none", cursor: "pointer", color: CS.muted }}
+          aria-label={language === "es" ? "Duplicar tarea" : "Duplicate task"}>
+          <Copy className="h-3 w-3" />
         </button>
-        {/* Delete */}
-        <button
-          type="button"
-          onClick={() => onDelete(task.id)}
+        <button type="button" onClick={() => onDelete(task.id)}
           className="flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity"
-          style={{
-            width: 24, height: 24,
-            background: "none", border: "none",
-            cursor: "pointer", color: "#ef4444",
-          }}
-          aria-label="Delete task"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
+          style={{ width: 22, height: 22, background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}
+          aria-label="Delete task">
+          <Trash2 className="h-3 w-3" />
         </button>
       </div>
     </div>
@@ -604,6 +469,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   const [resizingId, setResizingId]     = useState<string | null>(null);
   const [movingId, setMovingId]         = useState<string | null>(null);
   const [zoomStep, _setZoomStep]        = useState(0);
+  const [viewMode, setViewMode]        = useState<"weeks" | "months">("weeks");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
   // ── Load on mount ───────────────────────────────────────────────────────────
@@ -1053,10 +919,10 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       </ToolbarGroup>
       <ToolbarSep />
       <ToolbarGroup label={lang === "es" ? "Vista" : "View"}>
-        <TBtn active>
+        <TBtn active={viewMode === "weeks"} onClick={() => setViewMode("weeks")}>
           <LayoutList className="h-3.5 w-3.5" /> {lang === "es" ? "Semanas" : "Weeks"}
         </TBtn>
-        <TBtn>
+        <TBtn active={viewMode === "months"} onClick={() => setViewMode("months")}>
           <CalendarDays className="h-3.5 w-3.5" /> {lang === "es" ? "Meses" : "Months"}
         </TBtn>
       </ToolbarGroup>
@@ -1155,73 +1021,63 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       {tasks.length > 0 && (
         <div
           className="rounded-[10px] overflow-hidden overflow-x-auto"
-          style={{ border: `1px solid ${CS.border}`, background: CS.surface }}
+          style={{ border: "1px solid #1e2230", background: "#0d1117" }}
         >
           {/* Column headers */}
-          <div
-            className="flex shrink-0"
-            style={{
-              borderBottom: `1px solid ${CS.border}`,
-              background: "rgba(255,255,255,0.03)",
-              minWidth: 600,
-            }}
-          >
+          <div className="flex shrink-0" style={{ borderBottom: "0.5px solid #1e2230", minWidth: 600 }}>
             {/* Left header */}
-            <div
-              className="shrink-0 flex items-center px-3 text-xs font-semibold font-dm-sans"
-              style={{
-                width: LEFT_W,
-                minWidth: LEFT_W,
-                borderRight: `1px solid ${CS.border}`,
-                color: CS.muted,
-                height: 36,
-              }}
-            >
-              {lang === "es" ? "Tarea / Estatus" : "Task / Status"}
+            <div className="shrink-0 flex items-center px-3 text-xs font-semibold font-dm-sans"
+              style={{ width: LEFT_W, minWidth: LEFT_W, borderRight: "0.5px solid #1e2230", color: CS.muted, height: 32 }}>
+              {lang === "es" ? "Tarea" : "Task"}
             </div>
 
-            {/* Week group labels */}
-            <div
-              ref={timelineHeaderRef}
-              className="relative flex flex-1"
-              style={{ minWidth: timelineMinPx > 0 ? timelineMinPx : 0 }}
-            >
-              {weekGroups.map(({ start, end }) => {
-                const span = end - start + 1;
-                const pct = (span / totalWeeks) * 100;
-                return (
-                  <div
-                    key={start}
-                    className="flex items-center justify-center text-xs font-dm-sans shrink-0"
+            {/* Week / Month column labels */}
+            <div ref={timelineHeaderRef} className="relative flex flex-1"
+              style={{ minWidth: timelineMinPx > 0 ? timelineMinPx : 0 }}>
+              {viewMode === "weeks" ? (
+                /* Individual week columns S1, S2, ... */
+                Array.from({ length: totalWeeks }, (_, i) => (
+                  <div key={i} className="flex flex-col items-center justify-center font-dm-sans shrink-0"
                     style={{
-                      width: `${pct}%`,
-                      height: 36,
-                      borderRight: `1px solid ${CS.border}`,
-                      color: CS.muted,
-                    }}
-                  >
-                    <span style={{ display: "block", fontSize: 9.5, fontWeight: 600 }}>
-                      {fmtWeekLabel(start)}
+                      width: `${(1 / totalWeeks) * 100}%`, height: 32,
+                      borderRight: "0.5px solid #1e2230", color: CS.muted,
+                      background: i % 2 === 0 ? "#0d1117" : "#0f1117",
+                    }}>
+                    <span style={{ fontSize: 10, fontWeight: 600 }}>
+                      {lang === "es" ? "S" : "W"}{i + 1}
                     </span>
-                    <span style={{ display: "block", fontSize: 8.5, opacity: 0.6, marginTop: 1 }}>
-                      {lang === "es" ? `S${start}` : `W${start}`}{end > start ? `–${end}` : ""}
-                    </span>
+                    <span style={{ fontSize: 8, opacity: 0.5 }}>{fmtWeekLabel(i + 1)}</span>
                   </div>
-                );
-              })}
+                ))
+              ) : (
+                /* Month columns (4 weeks each) */
+                weekGroups.map(({ start, end }, gi) => {
+                  const span = end - start + 1;
+                  const pct = (span / totalWeeks) * 100;
+                  return (
+                    <div key={start} className="flex flex-col items-center justify-center font-dm-sans shrink-0"
+                      style={{
+                        width: `${pct}%`, height: 32,
+                        borderRight: "0.5px solid #1e2230", color: CS.muted,
+                        background: gi % 2 === 0 ? "#0d1117" : "#0f1117",
+                      }}>
+                      <span style={{ fontSize: 10, fontWeight: 600 }}>
+                        {lang === "es" ? `Mes ${gi + 1}` : `Month ${gi + 1}`}
+                      </span>
+                      <span style={{ fontSize: 8, opacity: 0.5 }}>
+                        {lang === "es" ? "S" : "W"}{start}–{end}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+
               {/* Today indicator */}
               {todayPct !== null && (
-                <div
-                  className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none"
-                  style={{ left: `${todayPct}%`, transform: "translateX(-50%)", zIndex: 5 }}
-                >
-                  <div
-                    className="text-white rounded px-1"
-                    style={{
-                      fontSize: 9, fontWeight: 700, fontFamily: "var(--font-dm-sans)",
-                      background: CS.accent, marginTop: 3, lineHeight: 1.5, whiteSpace: "nowrap",
-                    }}
-                  >
+                <div className="absolute top-0 bottom-0 flex flex-col items-center pointer-events-none"
+                  style={{ left: `${todayPct}%`, transform: "translateX(-50%)", zIndex: 5 }}>
+                  <div className="text-white rounded px-1"
+                    style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--font-dm-sans)", background: CS.accent, marginTop: 2, lineHeight: 1.4, whiteSpace: "nowrap" }}>
                     {lang === "es" ? "Hoy" : "Today"}
                   </div>
                   <div style={{ flex: 1, width: 2, background: CS.accent, opacity: 0.8 }} />
@@ -1295,13 +1151,25 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
               </span>
             </div>
           )}
+          <div className="flex items-center gap-1.5 ml-2">
+            <div style={{ width: 14, height: 7, background: "#f97316", borderRadius: 2 }} />
+            <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es" ? "Capítulo" : "Chapter"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div style={{ width: 14, height: 5, background: "#3b82f6", borderRadius: 2 }} />
+            <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es" ? "Tarea" : "Task"}
+            </span>
+          </div>
           <span
             className="text-xs font-dm-sans ml-auto hidden sm:block"
             style={{ color: "rgba(139,150,165,0.55)" }}
           >
             {lang === "es"
-              ? "← → Barra/borde para mover · Clic en estatus para cambiar"
-              : "← → Bar/edge to move · Click status to cycle"}
+              ? "← → Barra/borde para mover · Clic en % para cambiar"
+              : "← → Bar/edge to move · Click % to cycle"}
           </span>
         </div>
       )}
