@@ -10,7 +10,15 @@ import {
   TrendingUp,
   Calendar,
   Activity,
+  FileText,
+  Printer,
+  BarChart2,
+  FileOutput,
 } from "lucide-react";
+import {
+  ToolbarPortal, ToolbarGroup, ToolbarSep,
+  TBtn,
+} from "@/components/workspace/ContextualToolbar";
 import {
   PieChart,
   Pie,
@@ -464,6 +472,36 @@ export default function ReportsTab() {
   }
 
   return (
+    <>
+    <ToolbarPortal>
+      <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
+        <TBtn onClick={handleBudgetCSV} disabled={budgetRows.length === 0}>
+          <Download className="h-3.5 w-3.5" /> CSV
+        </TBtn>
+        <TBtn onClick={handlePDFDownload} disabled={pdfGenerating}>
+          <FileText className="h-3.5 w-3.5" /> {pdfGenerating ? (lang === "es" ? "Generando..." : "Generating...") : "PDF"}
+        </TBtn>
+        <TBtn onClick={handleApuCSV} disabled={apuItems.length === 0}>
+          <Download className="h-3.5 w-3.5" /> Excel
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <ToolbarGroup label={lang === "es" ? "Tipo" : "Type"}>
+        <TBtn active>
+          <BarChart2 className="h-3.5 w-3.5" /> {lang === "es" ? "Por capítulo" : "By chapter"}
+        </TBtn>
+        <TBtn>
+          <TrendingUp className="h-3.5 w-3.5" /> {lang === "es" ? "Avance" : "Progress"}
+        </TBtn>
+        <TBtn>
+          <FileOutput className="h-3.5 w-3.5" /> {lang === "es" ? "Resumen ejecutivo" : "Executive summary"}
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <TBtn onClick={() => window.print()}>
+        <Printer className="h-3.5 w-3.5" /> {lang === "es" ? "Imprimir" : "Print"}
+      </TBtn>
+    </ToolbarPortal>
     <div className="flex flex-col gap-6">
       {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -493,42 +531,6 @@ export default function ReportsTab() {
           >
             <Link2 className="h-4 w-4" />
             {lang === "es" ? "Compartir" : "Share"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBudgetCSV}
-            disabled={budgetRows.length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--cs-border)] px-3 py-2 text-sm text-[var(--cs-muted)] hover:text-[var(--cs-text)] hover:border-orange-500/30 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-            title={lang === "es" ? "Exportar presupuesto CSV" : "Export budget CSV"}
-          >
-            <Download className="h-4 w-4" />
-            {lang === "es" ? "Ppto." : "Budget"}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleApuCSV}
-            disabled={apuItems.length === 0}
-            className="flex items-center gap-1.5 rounded-lg border border-[var(--cs-border)] px-3 py-2 text-sm text-[var(--cs-muted)] hover:text-[var(--cs-text)] hover:border-orange-500/30 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-            title={lang === "es" ? "Exportar APU CSV" : "Export APU CSV"}
-          >
-            <Download className="h-4 w-4" />
-            APU
-          </button>
-
-          {/* PDF Export — on-demand generation to avoid re-render loops */}
-          <button
-            type="button"
-            onClick={handlePDFDownload}
-            disabled={pdfGenerating}
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--cs-accent)] px-3 py-2 text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
-          >
-            <Download className="h-4 w-4" />
-            {pdfGenerating
-              ? (lang === "es" ? "Generando..." : "Generating...")
-              : "PDF"
-            }
           </button>
         </div>
       </div>
@@ -874,5 +876,6 @@ export default function ReportsTab() {
         </ChartCard>
       )}
     </div>
+    </>
   );
 }

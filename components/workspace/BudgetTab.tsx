@@ -6,7 +6,12 @@ import {
 import {
   Plus, Trash2, Loader2, X, Search, Import, BookOpen,
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
+  FileText, Filter, ArrowDownToLine, TableIcon,
 } from "lucide-react";
+import {
+  ToolbarPortal, ToolbarGroup, ToolbarSep,
+  TBtn, TBtnPrimary,
+} from "@/components/workspace/ContextualToolbar";
 import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor,
   useSensor, useSensors, type DragEndEvent,
@@ -2100,6 +2105,30 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   const panelOpen = !!selectedRowId;
 
   return (
+    <>
+    <ToolbarPortal>
+      <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
+        <TBtn onClick={handleCSVExport} disabled={rows.length === 0}>
+          <Download className="h-3.5 w-3.5" /> CSV
+        </TBtn>
+        <TBtn onClick={handlePrintReport} disabled={rows.length === 0}>
+          <FileText className="h-3.5 w-3.5" /> PDF
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <ToolbarGroup label={lang === "es" ? "Importar" : "Import"}>
+        <TBtn onClick={() => setShowPaste(true)}>
+          <ClipboardPaste className="h-3.5 w-3.5" /> {lang === "es" ? "Pegar Excel" : "Paste Excel"}
+        </TBtn>
+        <TBtn onClick={() => setShowImport(true)}>
+          <ArrowDownToLine className="h-3.5 w-3.5" /> {lang === "es" ? "Importar APU" : "Import APU"}
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <TBtnPrimary onClick={() => setShowAdd(true)}>
+        <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "+ Agregar" : "+ Add Item"}
+      </TBtnPrimary>
+    </ToolbarPortal>
     <div className="flex flex-col gap-4" style={{ paddingRight: panelOpen ? 408 : 0, transition: "padding-right 200ms ease" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -2140,59 +2169,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={handleCSVExport} disabled={rows.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: rows.length === 0 ? CS.muted : CS.muted, cursor: rows.length === 0 ? "not-allowed" : "pointer", opacity: rows.length === 0 ? 0.4 : 1 }}
-            onMouseEnter={(e) => { if (rows.length > 0) (e.currentTarget as HTMLButtonElement).style.color = CS.text; }}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
-            <Download className="h-4 w-4" />
-            CSV
-          </button>
-          <button type="button" onClick={handlePrintReport} disabled={rows.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: rows.length === 0 ? CS.muted : CS.text, cursor: rows.length === 0 ? "not-allowed" : "pointer", opacity: rows.length === 0 ? 0.4 : 1 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            PDF
-          </button>
-          <button type="button" onClick={() => setShowPaste(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
-            <ClipboardPaste className="h-4 w-4" />
-            {lang === "es" ? "Pegar Excel" : "Paste Excel"}
-          </button>
-          <button type="button" onClick={() => setShowLibrary(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
-            <BookOpen className="h-4 w-4" />
-            {lang === "es" ? "Base precios" : "Price Library"}
-          </button>
-          <button type="button" onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
-            <Import className="h-4 w-4" />
-            {lang === "es" ? "Importar APU" : "Import APU"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowAPULibrary(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            📚 Biblioteca de APUs
-          </button>
-          <button type="button" onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
-            <Plus className="h-4 w-4" />
-            {lang === "es" ? "+ Agregar" : "+ Add Item"}
-          </button>
-        </div>
+        {/* Buttons moved to ContextualToolbar via portal */}
       </div>
 
       {/* ── Search bar ─────────────────────────────────────── */}
@@ -2663,6 +2640,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         />
       )}
     </div>
+    </>
   );
 }
 

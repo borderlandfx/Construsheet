@@ -4,7 +4,12 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Trash2, Loader2, X,
   Download, ZoomIn, ZoomOut, Copy, ChevronRight, ChevronDown, Link2,
+  FileText, LayoutList, CalendarDays, Lock,
 } from "lucide-react";
+import {
+  ToolbarPortal, ToolbarGroup, ToolbarSep,
+  TBtn, TBadge,
+} from "@/components/workspace/ContextualToolbar";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { useToast } from "@/lib/context/ToastContext";
@@ -1036,6 +1041,31 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   );
 
   return (
+    <>
+    <ToolbarPortal>
+      <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
+        <TBtn onClick={handleCSV} disabled={tasks.length === 0}>
+          <Download className="h-3.5 w-3.5" /> CSV
+        </TBtn>
+        <TBtn onClick={handlePrintGantt} disabled={tasks.length === 0}>
+          <FileText className="h-3.5 w-3.5" /> PDF
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <ToolbarGroup label={lang === "es" ? "Vista" : "View"}>
+        <TBtn active>
+          <LayoutList className="h-3.5 w-3.5" /> {lang === "es" ? "Semanas" : "Weeks"}
+        </TBtn>
+        <TBtn>
+          <CalendarDays className="h-3.5 w-3.5" /> {lang === "es" ? "Meses" : "Months"}
+        </TBtn>
+      </ToolbarGroup>
+      <ToolbarSep />
+      <div style={{ flex: 1 }} />
+      <TBadge>
+        <Lock className="h-3 w-3" /> {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
+      </TBadge>
+    </ToolbarPortal>
     <div className="flex flex-col gap-4">
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -1083,124 +1113,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* CSV */}
-          <button
-            type="button"
-            onClick={handleCSV}
-            disabled={tasks.length === 0}
-            aria-label={lang === "es" ? "Exportar CSV" : "Export CSV"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: tasks.length === 0 ? "not-allowed" : "pointer",
-              opacity: tasks.length === 0 ? 0.45 : 1,
-            }}
-            onMouseEnter={(e) => {
-              if (tasks.length > 0)
-                (e.currentTarget as HTMLButtonElement).style.color = CS.text;
-            }}
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)
-            }
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            {lang === "es" ? "Exportar CSV" : "Export CSV"}
-          </button>
-
-          {/* PDF print */}
-          <button
-            type="button"
-            onClick={handlePrintGantt}
-            disabled={tasks.length === 0}
-            aria-label={lang === "es" ? "Exportar PDF" : "Export PDF"}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--cs-accent)]"
-            style={{
-              border: `1px solid ${CS.border}`,
-              background: "transparent",
-              color: CS.muted,
-              cursor: tasks.length === 0 ? "not-allowed" : "pointer",
-              opacity: tasks.length === 0 ? 0.45 : 1,
-            }}
-            onMouseEnter={(e) => { if (tasks.length > 0) (e.currentTarget as HTMLButtonElement).style.color = CS.text; }}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>
-            </svg>
-            {lang === "es" ? "Exportar PDF" : "Export PDF"}
-          </button>
-
-          {/* Zoom controls */}
-          {tasks.length > 0 && (
-            <div
-              className="flex items-center rounded-[10px] overflow-hidden"
-              style={{ border: `1px solid ${CS.border}` }}
-            >
-              <button
-                type="button"
-                onClick={() => setZoomStep((z) => Math.max(0, z - 1))}
-                disabled={zoomStep === 0}
-                aria-label={lang === "es" ? "Reducir zoom" : "Zoom out"}
-                className="flex items-center justify-center"
-                style={{
-                  width: 32, height: 32,
-                  background: "transparent",
-                  border: "none",
-                  cursor: zoomStep === 0 ? "not-allowed" : "pointer",
-                  color: zoomStep === 0 ? CS.muted : CS.text,
-                  opacity: zoomStep === 0 ? 0.4 : 1,
-                  borderRight: `1px solid ${CS.border}`,
-                }}
-                title={lang === "es" ? "Reducir zoom" : "Zoom out"}
-              >
-                <ZoomOut className="h-3.5 w-3.5" />
-              </button>
-              <span
-                className="text-xs font-dm-sans"
-                style={{ color: CS.muted, padding: "0 8px", minWidth: 44, textAlign: "center" }}
-              >
-                {zoomStep === 0
-                  ? (lang === "es" ? "Auto" : "Auto")
-                  : `${colPx}px`}
-              </span>
-              <button
-                type="button"
-                onClick={() => setZoomStep((z) => Math.min(ZOOM_STEPS.length - 1, z + 1))}
-                disabled={zoomStep === ZOOM_STEPS.length - 1}
-                aria-label={lang === "es" ? "Ampliar zoom" : "Zoom in"}
-                className="flex items-center justify-center"
-                style={{
-                  width: 32, height: 32,
-                  background: "transparent",
-                  border: "none",
-                  cursor: zoomStep === ZOOM_STEPS.length - 1 ? "not-allowed" : "pointer",
-                  color: zoomStep === ZOOM_STEPS.length - 1 ? CS.muted : CS.text,
-                  opacity: zoomStep === ZOOM_STEPS.length - 1 ? 0.4 : 1,
-                  borderLeft: `1px solid ${CS.border}`,
-                }}
-                title={lang === "es" ? "Ampliar zoom" : "Zoom in"}
-              >
-                <ZoomIn className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-
-          {/* Sync badge — tasks come from Budget */}
-          <span
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium font-dm-sans"
-            style={{
-              background: `${CS.accent}18`,
-              color: CS.accent,
-              border: `1px solid ${CS.accent}33`,
-            }}
-          >
-            <Link2 className="h-3.5 w-3.5" />
-            {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
-          </span>
-        </div>
+        {/* Buttons moved to ContextualToolbar via portal */}
       </div>
 
       {/* ── Loading state ───────────────────────────────────── */}
@@ -1436,5 +1349,6 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         );
       })()}
     </div>
+    </>
   );
 }

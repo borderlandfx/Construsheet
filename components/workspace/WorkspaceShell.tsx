@@ -6,6 +6,7 @@ import { ArrowLeft, Pencil, Check, Settings2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { WorkspaceProvider, useWorkspace } from "@/lib/context/WorkspaceContext";
 import TabBar from "@/components/workspace/TabBar";
+import { ContextualToolbar } from "@/components/workspace/ContextualToolbar";
 import ControlBar from "@/components/workspace/ControlBar";
 import APUTab from "@/components/workspace/APUTab";
 import BudgetTab from "@/components/workspace/BudgetTab";
@@ -293,6 +294,9 @@ function WorkspaceInner({
         onTabChange={setActiveTab}
         counts={counts}
       />
+
+      {/* ── Contextual toolbar ────────────────────────── */}
+      <ContextualToolbar />
 
       {/* ── Tab content (scrollable) ─────────────────── */}
       <div

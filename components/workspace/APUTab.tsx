@@ -3,8 +3,12 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus, Trash2, Pencil, Loader2, X,
-  Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText,
+  Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText, Download, Sparkles,
 } from "lucide-react";
+import {
+  ToolbarPortal, ToolbarGroup, ToolbarSep,
+  TBtn, TBtnPrimary, TBtnAI,
+} from "@/components/workspace/ContextualToolbar";
 import { createClient } from "@/lib/supabase/client";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { useToast } from "@/lib/context/ToastContext";
@@ -1413,7 +1417,61 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
     win.document.close();
   }
 
+  function handleCSVExport() {
+    const headers = [
+      lang === "es" ? "Código" : "Code",
+      lang === "es" ? "Descripción" : "Description",
+      lang === "es" ? "Unidad" : "Unit",
+      lang === "es" ? "Costo Directo" : "Direct Cost",
+      lang === "es" ? "GG %" : "OH %",
+      lang === "es" ? "Utilidad %" : "Profit %",
+      lang === "es" ? "Precio Final" : "Selling Price",
+    ];
+    const csvRows = items.map((item) => [
+      item.code, item.description, item.unit,
+      item.direct_cost.toFixed(2),
+      item.overhead_pct.toFixed(2),
+      item.profit_pct.toFixed(2),
+      item.selling_price.toFixed(2),
+    ]);
+    const csv = [headers, ...csvRows]
+      .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = `apu-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
+    <>
+      <ToolbarPortal>
+        <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
+          <TBtn onClick={handleCSVExport} disabled={items.length === 0}>
+            <Download className="h-3.5 w-3.5" /> CSV
+          </TBtn>
+          <TBtn onClick={handlePrintAPU} disabled={items.length === 0}>
+            <FileText className="h-3.5 w-3.5" /> PDF
+          </TBtn>
+        </ToolbarGroup>
+        <ToolbarSep />
+        <ToolbarGroup label={lang === "es" ? "Biblioteca" : "Library"}>
+          <TBtn onClick={onLibrary}>
+            <BookOpen className="h-3.5 w-3.5" /> {lang === "es" ? "Biblioteca" : "Library"}
+          </TBtn>
+        </ToolbarGroup>
+        <ToolbarSep />
+        <ToolbarGroup label="IA">
+          <TBtnAI onClick={onAI}>
+            <Sparkles className="h-3.5 w-3.5" /> {lang === "es" ? "Sugerir con IA" : "AI Suggest"}
+          </TBtnAI>
+        </ToolbarGroup>
+        <ToolbarSep />
+        <TBtnPrimary onClick={onNew}>
+          <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "Nuevo APU" : "New APU"}
+        </TBtnPrimary>
+      </ToolbarPortal>
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
@@ -1457,65 +1515,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button type="button" onClick={() => {
-            const headers = [
-              lang === "es" ? "Código" : "Code",
-              lang === "es" ? "Descripción" : "Description",
-              lang === "es" ? "Unidad" : "Unit",
-              lang === "es" ? "Costo Directo" : "Direct Cost",
-              lang === "es" ? "GG %" : "OH %",
-              lang === "es" ? "Utilidad %" : "Profit %",
-              lang === "es" ? "Precio Final" : "Selling Price",
-            ];
-            const csvRows = items.map((item) => [
-              item.code, item.description, item.unit,
-              item.direct_cost.toFixed(2),
-              item.overhead_pct.toFixed(2),
-              item.profit_pct.toFixed(2),
-              item.selling_price.toFixed(2),
-            ]);
-            const csv = [headers, ...csvRows]
-              .map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
-              .join("\n");
-            const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a"); a.href = url;
-            a.download = `apu-${Date.now()}.csv`; a.click();
-            URL.revokeObjectURL(url);
-          }} disabled={items.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: items.length === 0 ? CS.muted : CS.text, cursor: items.length === 0 ? "not-allowed" : "pointer", opacity: items.length === 0 ? 0.4 : 1 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            CSV
-          </button>
-          <button type="button" onClick={handlePrintAPU} disabled={items.length === 0}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: items.length === 0 ? CS.muted : CS.text, cursor: items.length === 0 ? "not-allowed" : "pointer", opacity: items.length === 0 ? 0.4 : 1 }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            PDF
-          </button>
-          <button type="button" onClick={onLibrary}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}>
-            <BookOpen className="h-4 w-4" />
-            {lang === "es" ? "Biblioteca" : "Library"}
-          </button>
-          <button type="button" onClick={onAI}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{ background: "rgba(249,115,22,0.1)", border: `1px solid rgba(249,115,22,0.3)`, color: CS.accent, cursor: "pointer" }}>
-            <span style={{ fontSize: 15 }}>✦</span>
-            {lang === "es" ? "Sugerir con IA" : "AI Suggest"}
-          </button>
-          <button type="button" onClick={onNew}
-            className="flex items-center gap-2 px-3 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
-            <Plus className="h-4 w-4" />
-            {lang === "es" ? "Nuevo APU" : "New APU"}
-          </button>
-        </div>
+        {/* Buttons moved to ContextualToolbar via portal above */}
       </div>
 
       {/* Empty state */}
@@ -1769,6 +1769,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
         </div>
       )}
     </div>
+    </>
   );
 }
 
