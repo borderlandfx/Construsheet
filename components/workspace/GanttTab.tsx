@@ -179,7 +179,7 @@ function SortableGanttRow({
 
   return (
     <div
-      style={{ borderBottom: "0.5px solid #1e2230", position: "relative", background: isParent ? "#161921" : undefined }}
+      style={{ borderBottom: "0.5px solid var(--color-border-tertiary)", position: "relative", background: isParent ? "var(--color-background-secondary)" : undefined }}
       className="group flex items-center hover:bg-white/[0.02]"
       data-testid={`gantt-row-${task.id}`}
     >
@@ -187,7 +187,7 @@ function SortableGanttRow({
       <div
         className="flex items-center gap-2 shrink-0"
         style={{
-          width: LEFT_W, minWidth: LEFT_W, borderRight: "0.5px solid #1e2230",
+          width: LEFT_W, minWidth: LEFT_W, borderRight: "0.5px solid var(--color-border-tertiary)",
           padding: "6px 8px", paddingLeft: isChild ? 32 : 8, minHeight: rowH,
         }}
       >
@@ -235,8 +235,8 @@ function SortableGanttRow({
             style={{
               left: `${(i / totalWeeks) * 100}%`,
               width: `${(1 / totalWeeks) * 100}%`,
-              background: i % 2 === 0 ? "#0d1117" : "#0f1117",
-              borderRight: "0.5px solid #1e2230",
+              background: i % 2 === 0 ? "var(--color-background-tertiary)" : "var(--color-background-secondary)",
+              borderRight: "0.5px solid var(--color-border-tertiary)",
             }} />
         ))}
 
@@ -1008,13 +1008,13 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       {tasks.length > 0 && (
         <div
           className="rounded-[10px] overflow-hidden overflow-x-auto"
-          style={{ border: "1px solid #1e2230", background: "#0d1117" }}
+          style={{ border: "1px solid var(--color-border-tertiary)", background: "var(--color-background-tertiary)" }}
         >
           {/* Column headers */}
-          <div className="flex shrink-0" style={{ borderBottom: "0.5px solid #1e2230", minWidth: 600 }}>
+          <div className="flex shrink-0" style={{ borderBottom: "0.5px solid var(--color-border-tertiary)", minWidth: 600 }}>
             {/* Left header */}
             <div className="shrink-0 flex items-center px-3 text-xs font-semibold font-dm-sans"
-              style={{ width: LEFT_W, minWidth: LEFT_W, borderRight: "0.5px solid #1e2230", color: CS.muted, height: 32 }}>
+              style={{ width: LEFT_W, minWidth: LEFT_W, borderRight: "0.5px solid var(--color-border-tertiary)", color: CS.muted, height: 32 }}>
               {lang === "es" ? "Tarea" : "Task"}
             </div>
 
@@ -1027,8 +1027,8 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
                   <div key={i} className="flex flex-col items-center justify-center font-dm-sans shrink-0"
                     style={{
                       width: `${(1 / totalWeeks) * 100}%`, height: 32,
-                      borderRight: "0.5px solid #1e2230", color: CS.muted,
-                      background: i % 2 === 0 ? "#0d1117" : "#0f1117",
+                      borderRight: "0.5px solid var(--color-border-tertiary)", color: CS.muted,
+                      background: i % 2 === 0 ? "var(--color-background-tertiary)" : "var(--color-background-secondary)",
                     }}>
                     <span style={{ fontSize: 10, fontWeight: 600 }}>
                       {lang === "es" ? "S" : "W"}{i + 1}
@@ -1045,8 +1045,8 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
                     <div key={start} className="flex flex-col items-center justify-center font-dm-sans shrink-0"
                       style={{
                         width: `${pct}%`, height: 32,
-                        borderRight: "0.5px solid #1e2230", color: CS.muted,
-                        background: gi % 2 === 0 ? "#0d1117" : "#0f1117",
+                        borderRight: "0.5px solid var(--color-border-tertiary)", color: CS.muted,
+                        background: gi % 2 === 0 ? "var(--color-background-tertiary)" : "var(--color-background-secondary)",
                       }}>
                       <span style={{ fontSize: 10, fontWeight: 600 }}>
                         {lang === "es" ? `Mes ${gi + 1}` : `Month ${gi + 1}`}

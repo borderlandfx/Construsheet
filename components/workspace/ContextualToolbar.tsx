@@ -13,8 +13,8 @@ export function ContextualToolbar() {
       className="flex items-center gap-2 px-5 shrink-0"
       style={{
         height: 42,
-        background: "#161921",
-        borderBottom: "0.5px solid #1e2230",
+        background: "var(--color-background-secondary)",
+        borderBottom: "0.5px solid var(--color-border-tertiary)",
         fontFamily: "var(--font-dm-sans)",
         fontSize: 12,
       }}
@@ -34,7 +34,7 @@ export function ToolbarPortal({ children }: { children: React.ReactNode }) {
 
 /** Vertical separator between button groups */
 export function ToolbarSep() {
-  return <div style={{ width: 0.5, height: 20, background: "#2d3247", flexShrink: 0 }} />;
+  return <div style={{ width: 0.5, height: 20, background: "var(--color-border-tertiary)", flexShrink: 0 }} />;
 }
 
 /** Group label + buttons */
@@ -45,7 +45,7 @@ export function ToolbarGroup({ label, children }: { label: string; children: Rea
         style={{
           fontSize: 10,
           textTransform: "uppercase",
-          color: "#4b5563",
+          color: "var(--color-text-tertiary)",
           fontWeight: 600,
           letterSpacing: "0.04em",
           whiteSpace: "nowrap",
@@ -64,7 +64,7 @@ const BASE: React.CSSProperties = {
   padding: "5px 10px",
   fontSize: 12,
   borderRadius: 6,
-  border: "1px solid #2d3247",
+  border: "1px solid var(--color-border-tertiary)",
   background: "transparent",
   cursor: "pointer",
   display: "inline-flex",
@@ -90,17 +90,17 @@ export function TBtn({
       disabled={disabled}
       style={{
         ...BASE,
-        color: active ? "#e5e7eb" : "#9ca3af",
-        ...(active ? { background: "rgba(255,255,255,0.06)", borderColor: "#3d4257" } : {}),
+        color: active ? "var(--color-text-primary)" : "var(--color-text-secondary)",
+        ...(active ? { background: "rgba(255,255,255,0.06)", borderColor: "var(--color-border-tertiary)" } : {}),
         ...(disabled ? { opacity: 0.4, cursor: "not-allowed" } : {}),
         ...props.style,
       }}
       onMouseEnter={(e) => {
-        if (!disabled) (e.currentTarget as HTMLButtonElement).style.color = "#e5e7eb";
+        if (!disabled) (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-primary)";
         props.onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
-        if (!active) (e.currentTarget as HTMLButtonElement).style.color = "#9ca3af";
+        if (!active) (e.currentTarget as HTMLButtonElement).style.color = "var(--color-text-secondary)";
         props.onMouseLeave?.(e);
       }}
     >
@@ -137,7 +137,7 @@ export function TBtnAI({ children, ...props }: React.ButtonHTMLAttributes<HTMLBu
       {...props}
       style={{
         ...BASE,
-        background: "#1a1040",
+        background: "var(--color-background-secondary)",
         borderColor: "#4c3a8c",
         color: "#a78bfa",
         fontWeight: 600,
@@ -157,8 +157,8 @@ export function TBadge({ children }: { children: React.ReactNode }) {
       style={{
         ...BASE,
         cursor: "default",
-        color: "#4b5563",
-        borderColor: "#2d3247",
+        color: "var(--color-text-tertiary)",
+        borderColor: "var(--color-border-tertiary)",
         fontSize: 11,
       }}
     >
