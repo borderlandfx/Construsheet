@@ -19,25 +19,26 @@ interface ProjectsDashboardProps {
 function CardSkeleton() {
   return (
     <div
-      className="flex flex-col gap-4 rounded-[10px]"
+      className="flex flex-col gap-3 rounded-xl"
       style={{
         background: "var(--cs-surface)",
         border: "1px solid var(--cs-border)",
         padding: "1.25rem",
-        height: 200,
+        height: 240,
       }}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="skeleton h-5 rounded flex-1" style={{ maxWidth: "60%" }} />
         <div className="skeleton h-6 w-20 rounded-full" />
       </div>
-      <div className="skeleton h-4 w-1/3 rounded" />
-      <div
-        className="skeleton rounded-lg mt-auto"
-        style={{ height: 52 }}
-      />
-      <div className="flex justify-between">
-        <div className="skeleton h-3 w-24 rounded" />
+      <div className="grid grid-cols-2 gap-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="skeleton rounded-lg" style={{ height: 48 }} />
+        ))}
+      </div>
+      <div className="skeleton h-1.5 w-full rounded-full" />
+      <div className="flex justify-between mt-auto">
+        <div className="skeleton h-3 w-28 rounded" />
         <div className="skeleton h-3 w-16 rounded" />
       </div>
     </div>
@@ -68,7 +69,7 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
     async function fetchProjects() {
       const { data } = await supabase
         .from("projects")
-        .select("*, budget_rows(id, total)")
+        .select("*, budget_rows(id, total, status, is_chapter), apu_items(id)")
         .eq("user_id", userId)
         .order("updated_at", { ascending: false });
 
@@ -101,7 +102,7 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
 
   // Portfolio-level aggregates (derived from full list, not filtered)
   const portfolioTotal = projects.reduce(
-    (sum, p) => sum + p.budget_rows.reduce((s, r) => s + (r.total ?? 0), 0),
+    (sum, p) => sum + p.budget_rows.filter((r) => !r.is_chapter).reduce((s, r) => s + (r.total ?? 0), 0),
     0
   );
   const activeCount    = projects.filter((p) => p.status === "active").length;

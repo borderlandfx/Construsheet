@@ -76,7 +76,7 @@ export default function CreateProjectModal({
     }
 
     // optimistic: add with empty budget_rows
-    onProjectCreated({ ...data, budget_rows: [] });
+    onProjectCreated({ ...data, budget_rows: [], apu_items: [] });
     close();
   }
 

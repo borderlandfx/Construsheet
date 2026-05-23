@@ -2,19 +2,18 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { format } from "date-fns";
-import { es, enUS } from "date-fns/locale";
 import {
-  MapPin, Calendar, Receipt, TrendingUp, ArrowRight,
+  MapPin, Calendar, ArrowRight,
   MoreVertical, Pencil, Archive, ArchiveRestore, Trash2, X, Loader2, Copy,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { Locale } from "@/lib/utils/i18n";
 import { t } from "@/lib/utils/i18n";
-import type { Project, BudgetRow } from "@/lib/types/database.types";
+import type { Project, BudgetRow, ApuItem } from "@/lib/types/database.types";
 
 export type ProjectWithBudget = Project & {
-  budget_rows: Pick<BudgetRow, "id" | "total">[];
+  budget_rows: Pick<BudgetRow, "id" | "total" | "status" | "is_chapter">[];
+  apu_items: Pick<ApuItem, "id">[];
 };
 
 interface ProjectCardProps {
@@ -252,6 +251,17 @@ function DeleteConfirmModal({
 
 // ─── ProjectCard ──────────────────────────────────────────────────────────────
 
+function relativeDate(dateStr: string, locale: Locale): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return t("cardToday", locale);
+  if (diffDays === 1) return t("cardYesterday", locale);
+  const template = t("cardDaysAgo", locale);
+  return template.replace("{n}", String(diffDays));
+}
+
 export default function ProjectCard({ project: initialProject, locale, onUpdated, onDeleted, onDuplicated }: ProjectCardProps) {
   const supabase = createClient();
   const [project, setProject]     = useState(initialProject);
@@ -262,11 +272,15 @@ export default function ProjectCard({ project: initialProject, locale, onUpdated
   const menuRef = useRef<HTMLDivElement>(null);
 
   const statusCfg = STATUS_CONFIG[project.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.active;
-  const itemCount = project.budget_rows.length;
-  const totalBudget = project.budget_rows.reduce((sum, r) => sum + (r.total ?? 0), 0);
-  const dateLocale = locale === "en" ? enUS : es;
-  const createdDate  = format(new Date(project.created_at),  "d MMM yyyy",   { locale: dateLocale });
-  const updatedDate  = format(new Date(project.updated_at),  "d MMM yyyy",   { locale: dateLocale });
+  const budgetRows = project.budget_rows ?? [];
+  const apuItems = project.apu_items ?? [];
+  const nonChapterRows = budgetRows.filter((r) => !r.is_chapter);
+  const totalBudget = nonChapterRows.reduce((sum, r) => sum + (r.total ?? 0), 0);
+  const approvedTotal = nonChapterRows.filter((r) => r.status === "approved").reduce((sum, r) => sum + (r.total ?? 0), 0);
+  const approvedPct = totalBudget > 0 ? Math.round((approvedTotal / totalBudget) * 100) : 0;
+  const partidasCount = nonChapterRows.length;
+  const apuCount = apuItems.length;
+  const updatedRelative = relativeDate(project.updated_at, locale);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -413,7 +427,7 @@ export default function ProjectCard({ project: initialProject, locale, onUpdated
       // 5. Fetch new project with budget_rows for the dashboard card
       const { data: newProjFull } = await supabase
         .from("projects")
-        .select("*, budget_rows(id, total)")
+        .select("*, budget_rows(id, total, status, is_chapter), apu_items(id)")
         .eq("id", newId)
         .single();
 
@@ -434,194 +448,232 @@ export default function ProjectCard({ project: initialProject, locale, onUpdated
     color: "var(--cs-text)",
   };
 
+  const metricStyle: React.CSSProperties = {
+    display: "flex", flexDirection: "column", gap: 2,
+    padding: "8px 10px", borderRadius: 8,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid var(--cs-border)",
+    flex: 1, minWidth: 0,
+  };
+
   return (
     <>
-      <article
-        className="group flex flex-col gap-4 rounded-[10px] transition-all duration-200 relative"
-        style={{
-          background: "var(--cs-surface)",
-          border: "1px solid var(--cs-border)",
-          padding: "1.25rem",
-          height: "100%",
-          opacity: project.status === "archived" || duplicating ? 0.65 : 1,
-          pointerEvents: duplicating ? "none" : undefined,
-        }}
-        onMouseEnter={(e) => {
-          (e.currentTarget as HTMLElement).style.borderColor = "rgba(249,115,22,0.5)";
-          (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 1px rgba(249,115,22,0.15), 0 4px 24px rgba(249,115,22,0.08)";
-        }}
-        onMouseLeave={(e) => {
-          (e.currentTarget as HTMLElement).style.borderColor = "var(--cs-border)";
-          (e.currentTarget as HTMLElement).style.boxShadow = "none";
-        }}
-      >
-        {/* Duplicating overlay */}
-        {duplicating && (
-          <div
-            className="absolute inset-0 z-10 flex items-center justify-center rounded-[10px] gap-2"
-            style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
-          >
-            <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--cs-accent)" }} />
-            <span className="text-sm font-medium font-dm-sans" style={{ color: "var(--cs-text)" }}>
-              {locale === "es" ? "Duplicando…" : "Duplicating…"}
-            </span>
-          </div>
-        )}
+      <Link href={`/project/${project.id}`} style={{ textDecoration: "none" }}>
+        <article
+          className="group flex flex-col gap-3 rounded-xl transition-all duration-200 relative cursor-pointer"
+          style={{
+            background: "var(--cs-surface)",
+            border: "1px solid var(--cs-border)",
+            padding: "1.25rem",
+            height: "100%",
+            opacity: project.status === "archived" || duplicating ? 0.65 : 1,
+            pointerEvents: duplicating ? "none" : undefined,
+            borderRadius: "var(--border-radius-lg, 12px)",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "var(--color-border-secondary, rgba(249,115,22,0.5))";
+            (e.currentTarget as HTMLElement).style.boxShadow = "0 0 0 1px rgba(249,115,22,0.15), 0 4px 24px rgba(249,115,22,0.08)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.borderColor = "var(--cs-border)";
+            (e.currentTarget as HTMLElement).style.boxShadow = "none";
+          }}
+        >
+          {/* Duplicating overlay */}
+          {duplicating && (
+            <div
+              className="absolute inset-0 z-10 flex items-center justify-center rounded-xl gap-2"
+              style={{ background: "rgba(0,0,0,0.35)", backdropFilter: "blur(2px)" }}
+            >
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--cs-accent)" }} />
+              <span className="text-sm font-medium font-dm-sans" style={{ color: "var(--cs-text)" }}>
+                {locale === "es" ? "Duplicando…" : "Duplicating…"}
+              </span>
+            </div>
+          )}
 
-        {/* Header row */}
-        <div className="flex items-start justify-between gap-2">
-          <Link href={`/project/${project.id}`} style={{ textDecoration: "none", flex: 1, minWidth: 0 }}>
+          {/* Header row: name + status + menu */}
+          <div className="flex items-start justify-between gap-2">
             <h3
-              className="font-syne font-bold text-base leading-snug line-clamp-2"
+              className="font-syne font-bold text-base leading-snug line-clamp-2 flex-1 min-w-0"
               style={{ color: "var(--cs-text)" }}
             >
               {project.name}
             </h3>
-          </Link>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Status badge */}
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full text-xs font-medium px-2.5 py-1"
-              style={{
-                background: statusCfg.bg,
-                color: statusCfg.text,
-                fontFamily: "var(--font-dm-sans)",
-              }}
-            >
-              <span className="rounded-full" style={{ width: 6, height: 6, background: statusCfg.dot, display: "inline-block" }} />
-              {t(statusCfg.labelKey, locale)}
-            </span>
-
-            {/* Three-dot menu */}
-            <div ref={menuRef} style={{ position: "relative" }}>
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); setMenuOpen((o) => !o); }}
-                className="flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.preventDefault()}>
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full text-xs font-medium px-2.5 py-1"
                 style={{
-                  width: 26, height: 26, background: "none",
-                  border: "1px solid var(--cs-border)", cursor: "pointer",
-                  color: "var(--cs-muted)",
+                  background: statusCfg.bg,
+                  color: statusCfg.text,
+                  fontFamily: "var(--font-dm-sans)",
                 }}
-                aria-label={locale === "es" ? "Opciones del proyecto" : "Project options"}
               >
-                <MoreVertical className="h-3.5 w-3.5" />
-              </button>
+                <span className="rounded-full" style={{ width: 6, height: 6, background: statusCfg.dot, display: "inline-block" }} />
+                {t(statusCfg.labelKey, locale)}
+              </span>
 
-              {menuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 rounded-[10px] py-1 z-20"
+              {/* Three-dot menu */}
+              <div ref={menuRef} style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen((o) => !o); }}
+                  className="flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                   style={{
-                    minWidth: 160,
-                    background: "var(--cs-surface)",
-                    border: "1px solid var(--cs-border)",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+                    width: 26, height: 26, background: "none",
+                    border: "1px solid var(--cs-border)", cursor: "pointer",
+                    color: "var(--cs-muted)",
                   }}
+                  aria-label={locale === "es" ? "Opciones del proyecto" : "Project options"}
                 >
-                  <button
-                    style={menuItemStyle}
-                    onClick={(e) => { e.preventDefault(); setMenuOpen(false); setShowEdit(true); }}
-                    onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-                    onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
-                  >
-                    <Pencil className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />
-                    {locale === "es" ? "Editar" : "Edit"}
-                  </button>
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
 
-                  <button
-                    style={menuItemStyle}
-                    onClick={(e) => { e.preventDefault(); handleArchiveToggle(); }}
-                    onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-                    onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                {menuOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-1 rounded-[10px] py-1 z-20"
+                    style={{
+                      minWidth: 160,
+                      background: "var(--cs-surface)",
+                      border: "1px solid var(--cs-border)",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+                    }}
                   >
-                    {project.status === "archived"
-                      ? <ArchiveRestore className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />
-                      : <Archive className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />}
-                    {project.status === "archived"
-                      ? (locale === "es" ? "Activar" : "Unarchive")
-                      : (locale === "es" ? "Archivar" : "Archive")}
-                  </button>
+                    <button
+                      style={menuItemStyle}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); setShowEdit(true); }}
+                      onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                      onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                    >
+                      <Pencil className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />
+                      {locale === "es" ? "Editar" : "Edit"}
+                    </button>
 
-                  <button
-                    style={menuItemStyle}
-                    disabled={duplicating}
-                    onClick={(e) => { e.preventDefault(); handleDuplicate(); }}
-                    onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-                    onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
-                  >
-                    {duplicating
-                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "var(--cs-muted)" }} />
-                      : <Copy className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />}
-                    {locale === "es" ? "Duplicar" : "Duplicate"}
-                  </button>
+                    <button
+                      style={menuItemStyle}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleArchiveToggle(); }}
+                      onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                      onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                    >
+                      {project.status === "archived"
+                        ? <ArchiveRestore className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />
+                        : <Archive className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />}
+                      {project.status === "archived"
+                        ? (locale === "es" ? "Activar" : "Unarchive")
+                        : (locale === "es" ? "Archivar" : "Archive")}
+                    </button>
 
-                  <div style={{ height: 1, background: "var(--cs-border)", margin: "4px 8px" }} />
+                    <button
+                      style={menuItemStyle}
+                      disabled={duplicating}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDuplicate(); }}
+                      onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(255,255,255,0.05)")}
+                      onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                    >
+                      {duplicating
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: "var(--cs-muted)" }} />
+                        : <Copy className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />}
+                      {locale === "es" ? "Duplicar" : "Duplicate"}
+                    </button>
 
-                  <button
-                    style={{ ...menuItemStyle, color: "#ef4444" }}
-                    onClick={(e) => { e.preventDefault(); setMenuOpen(false); setShowDelete(true); }}
-                    onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(239,68,68,0.08)")}
-                    onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {locale === "es" ? "Eliminar" : "Delete"}
-                  </button>
-                </div>
-              )}
+                    <div style={{ height: 1, background: "var(--cs-border)", margin: "4px 8px" }} />
+
+                    <button
+                      style={{ ...menuItemStyle, color: "#ef4444" }}
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuOpen(false); setShowDelete(true); }}
+                      onMouseEnter={(el) => (el.currentTarget.style.background = "rgba(239,68,68,0.08)")}
+                      onMouseLeave={(el) => (el.currentTarget.style.background = "transparent")}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {locale === "es" ? "Eliminar" : "Delete"}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Location */}
-        {project.location && (
-          <div className="flex items-center gap-1.5" style={{ color: "var(--cs-muted)" }}>
-            <MapPin className="h-3.5 w-3.5 shrink-0" />
-            <span className="text-sm font-dm-sans truncate">{project.location}</span>
-          </div>
-        )}
-
-        {/* Stats row */}
-        <Link href={`/project/${project.id}`} style={{ textDecoration: "none", marginTop: "auto" }}>
-          <div
-            className="flex items-center gap-4 rounded-lg py-3 px-3"
-            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--cs-border)" }}
-          >
-            <div className="flex items-center gap-1.5 flex-1">
-              <Receipt className="h-3.5 w-3.5" style={{ color: "var(--cs-muted)" }} />
-              <span className="text-sm font-dm-sans" style={{ color: "var(--cs-text)" }}>{itemCount}</span>
-              <span className="text-xs font-dm-sans" style={{ color: "var(--cs-muted)" }}>{t("budgetItems", locale)}</span>
-            </div>
-            <div className="w-px self-stretch" style={{ background: "var(--cs-border)" }} />
-            <div className="flex items-center gap-1.5 flex-1 justify-end">
-              <TrendingUp className="h-3.5 w-3.5" style={{ color: "var(--cs-accent)" }} />
-              <span className="text-sm font-semibold font-dm-sans" style={{ color: "var(--cs-text)" }}>
+          {/* Metrics row: 2x2 grid */}
+          <div className="grid grid-cols-2 gap-2 mt-1">
+            <div style={metricStyle}>
+              <span className="text-[11px] font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                {t("cardBudget", locale)}
+              </span>
+              <span className="text-sm font-semibold font-dm-sans truncate" style={{ color: "var(--cs-text)" }}>
                 {formatCurrency(totalBudget, project.currency)}
               </span>
             </div>
-          </div>
-        </Link>
-
-        {/* Footer */}
-        <Link href={`/project/${project.id}`} style={{ textDecoration: "none" }}>
-          <div className="flex items-center justify-between">
-            <div
-              className="flex items-center gap-1.5"
-              style={{ color: "var(--cs-muted)" }}
-              title={`${t("createdOn", locale)}: ${createdDate}`}
-            >
-              <Calendar className="h-3 w-3" />
-              <span className="text-xs font-dm-sans">
-                {t("lastUpdated", locale)}: {updatedDate}
+            <div style={metricStyle}>
+              <span className="text-[11px] font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                {t("cardApproved", locale)}
+              </span>
+              <span className="text-sm font-semibold font-dm-sans" style={{ color: "#22c55e" }}>
+                {approvedPct}%
               </span>
             </div>
-            <span className="flex items-center gap-1 text-xs font-medium font-dm-sans" style={{ color: "var(--cs-muted)" }}>
-              {t("openProject", locale)}
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" style={{ color: "var(--cs-accent)" }} />
+            <div style={metricStyle}>
+              <span className="text-[11px] font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                {t("cardApus", locale)}
+              </span>
+              <span className="text-sm font-semibold font-dm-sans" style={{ color: "var(--cs-text)" }}>
+                {apuCount}
+              </span>
+            </div>
+            <div style={metricStyle}>
+              <span className="text-[11px] font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                {t("cardPartidas", locale)}
+              </span>
+              <span className="text-sm font-semibold font-dm-sans" style={{ color: "var(--cs-text)" }}>
+                {partidasCount}
+              </span>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div className="flex flex-col gap-1.5">
+            <div
+              className="w-full rounded-full overflow-hidden"
+              style={{ height: 5, background: "rgba(255,255,255,0.06)" }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${approvedPct}%`,
+                  background: "#22c55e",
+                  minWidth: approvedPct > 0 ? 4 : 0,
+                }}
+              />
+            </div>
+            <span className="text-[11px] font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+              {approvedPct}% {t("cardApprovedPct", locale)}
             </span>
           </div>
-        </Link>
-      </article>
+
+          {/* Footer row */}
+          <div className="flex items-center justify-between mt-auto pt-1">
+            <div className="flex items-center gap-3" style={{ color: "var(--cs-muted)" }}>
+              {project.location && (
+                <span className="flex items-center gap-1 text-xs font-dm-sans truncate" style={{ maxWidth: 140 }}>
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  {project.location}
+                </span>
+              )}
+              <span className="flex items-center gap-1 text-xs font-dm-sans">
+                <Calendar className="h-3 w-3 shrink-0" />
+                {updatedRelative}
+              </span>
+            </div>
+            <span
+              className="flex items-center gap-1 text-xs font-semibold font-dm-sans shrink-0"
+              style={{ color: "var(--cs-accent)" }}
+            >
+              {t("openProject", locale)}
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </span>
+          </div>
+        </article>
+      </Link>
 
       {showEdit && (
         <EditProjectModal
