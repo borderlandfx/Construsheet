@@ -24,74 +24,48 @@ import {
 import type { Locale } from "@/lib/utils/i18n";
 import { useAIAPU } from "@/lib/hooks/useAIAPU";
 
-// ─── APU Categories (Insucons.com standard) ─────────────────────────────────
+// ─── APU Chapter Categories ──────────────────────────────────────────────────
 
-export const APU_CATEGORIES = [
-  "ACABADOS", "AIRE ACONDICIONADO", "ALBAÑILERIA", "ALCANTARILLADO", "ALUMBRADO",
-  "ALUMINIO", "CANALIZACIONES ESPECIALES ILUM. VARIOS", "CANCELERIA", "CARPINTERIA",
-  "CERRAJERIA", "CIMENTACION", "CONDULETS", "CONTROLES Y ARRANCADORES", "EDIFICACION",
-  "EQUIPO CONTRA INCENDIO", "ESTRUCTURA DE CONCRETO", "ESTRUCTURA METALICA", "HERRERIA",
-  "INSTALACION HIDRAULICA", "INSTALACIONES AGUA POTABLE", "INSTALACIONES DE GAS",
-  "INSTALACIONES ELECTRICAS", "INSTALACIONES SANITARIAS", "LIMPIEZA", "MANGUERAS FLEXIBLES",
-  "MOBILIARIO", "MOVIMIENTO DE TIERRAS", "MUEBLES SANITARIOS", "OBRA EXTERIOR",
-  "OBRAS PRELIMINARES", "PAVIMENTOS", "PISOS Y SUELOS", "POLOTES", "SOPORTERIA",
-  "TABLEROS E INTERRUPTORES", "TUBERIA CONDUIT Y CONEXIONES",
-  "TUBERIA Y CONEXIONES DE ACERO SOLDADO", "TUBERIA Y CONEXIONES DE COBRE",
-  "TUBERIA Y CONEXIONES DE PVC", "TUBERIA Y CONEXIONES NEGRA Y GALVANIZADA",
-  "VALVULAS Y LLAVES", "VIDRIOS, ACRILICOS Y ESPEJOS", "VOZ Y DATOS",
+export const CHAPTER_CATEGORIES = [
+  { es: "Obras Preliminares",            en: "Preliminary Works" },
+  { es: "Movimiento de Tierras",         en: "Earthworks" },
+  { es: "Cimentación",                   en: "Foundation" },
+  { es: "Estructura",                    en: "Structure" },
+  { es: "Estructura Metálica",           en: "Metal Structure" },
+  { es: "Albañilería y Mampostería",     en: "Masonry" },
+  { es: "Herrería",                      en: "Ironworks" },
+  { es: "Carpintería",                   en: "Carpentry" },
+  { es: "Acabados",                      en: "Finishes" },
+  { es: "Pisos y Suelos",               en: "Floors" },
+  { es: "Instalaciones Hidráulicas",     en: "Hydraulic Installations" },
+  { es: "Instalaciones de Agua Potable", en: "Plumbing" },
+  { es: "Instalaciones Sanitarias",      en: "Sanitary Installations" },
+  { es: "Instalaciones de Gas",          en: "Gas Installations" },
+  { es: "Instalaciones Eléctricas",      en: "Electrical Installations" },
+  { es: "Tableros e Interruptores",      en: "Panels & Switches" },
+  { es: "Tubería y Conexiones",          en: "Piping & Connections" },
+  { es: "Válvulas y Llaves",             en: "Valves & Faucets" },
+  { es: "Instalaciones Especiales",      en: "Special Installations" },
+  { es: "Voz y Datos",                   en: "Voice & Data" },
+  { es: "Limpieza",                      en: "Cleaning" },
+  { es: "Pavimentos",                    en: "Pavements" },
+  { es: "Obra Exterior",                 en: "Exterior Works" },
+  { es: "Impermeabilizaciones",          en: "Waterproofing" },
+  { es: "Aluminio y Vidrio",             en: "Aluminum & Glass" },
+  { es: "Pintura",                       en: "Painting" },
+  { es: "Mobiliario y Equipo",           en: "Furniture & Equipment" },
+  { es: "Equipo Contra Incendio",        en: "Fire Protection" },
+  { es: "Soportería",                    en: "Supports" },
+  { es: "Polotes",                       en: "Piles" },
 ] as const;
 
-export type ApuCategory = (typeof APU_CATEGORIES)[number];
-
-const CATEGORY_EN_MAP: Record<string, string> = {
-  "ACABADOS": "Finishes",
-  "AIRE ACONDICIONADO": "HVAC / Air Conditioning",
-  "ALBAÑILERIA": "Masonry",
-  "ALCANTARILLADO": "Sewage & Drainage",
-  "ALUMBRADO": "Lighting",
-  "ALUMINIO": "Aluminum Works",
-  "CANALIZACIONES ESPECIALES ILUM. VARIOS": "Special Conduit & Lighting",
-  "CANCELERIA": "Doors & Windows",
-  "CARPINTERIA": "Carpentry",
-  "CERRAJERIA": "Locksmith & Hardware",
-  "CIMENTACION": "Foundation",
-  "CONDULETS": "Conduit Fittings",
-  "CONTROLES Y ARRANCADORES": "Controls & Starters",
-  "EDIFICACION": "Building Works",
-  "EQUIPO CONTRA INCENDIO": "Fire Protection",
-  "ESTRUCTURA DE CONCRETO": "Concrete Structure",
-  "ESTRUCTURA METALICA": "Steel Structure",
-  "HERRERIA": "Ironwork",
-  "INSTALACION HIDRAULICA": "Hydraulic Installation",
-  "INSTALACIONES AGUA POTABLE": "Potable Water",
-  "INSTALACIONES DE GAS": "Gas Installations",
-  "INSTALACIONES ELECTRICAS": "Electrical",
-  "INSTALACIONES SANITARIAS": "Plumbing & Sanitary",
-  "LIMPIEZA": "Cleaning & Clearing",
-  "MANGUERAS FLEXIBLES": "Flexible Hoses",
-  "MOBILIARIO": "Furniture & Fixtures",
-  "MOVIMIENTO DE TIERRAS": "Earthworks",
-  "MUEBLES SANITARIOS": "Sanitary Fixtures",
-  "OBRA EXTERIOR": "Exterior Works",
-  "OBRAS PRELIMINARES": "Preliminary Works",
-  "PAVIMENTOS": "Pavements & Paving",
-  "PISOS Y SUELOS": "Flooring",
-  "POLOTES": "Piles & Deep Foundations",
-  "SOPORTERIA": "Support Structures",
-  "TABLEROS E INTERRUPTORES": "Panels & Breakers",
-  "TUBERIA CONDUIT Y CONEXIONES": "Conduit & Fittings",
-  "TUBERIA Y CONEXIONES DE ACERO SOLDADO": "Welded Steel Pipe",
-  "TUBERIA Y CONEXIONES DE COBRE": "Copper Pipe & Fittings",
-  "TUBERIA Y CONEXIONES DE PVC": "PVC Pipe & Fittings",
-  "TUBERIA Y CONEXIONES NEGRA Y GALVANIZADA": "Black & Galvanized Pipe",
-  "VALVULAS Y LLAVES": "Valves & Faucets",
-  "VIDRIOS, ACRILICOS Y ESPEJOS": "Glass, Acrylic & Mirrors",
-  "VOZ Y DATOS": "Voice & Data",
-};
+// Build lookup map: es name → en name (canonical key is always the es value)
+const CATEGORY_EN_MAP: Record<string, string> = {};
+for (const c of CHAPTER_CATEGORIES) CATEGORY_EN_MAP[c.es] = c.en;
 
 export function getCategoryLabel(cat: string | null | undefined, lang: Locale): string {
   if (!cat) return "";
-  if (lang === "en" && CATEGORY_EN_MAP[cat]) return CATEGORY_EN_MAP[cat]!;
+  if (lang === "en" && CATEGORY_EN_MAP[cat]) return CATEGORY_EN_MAP[cat];
   return cat;
 }
 
@@ -857,36 +831,41 @@ function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId
               background: CS.surface, border: `1px solid ${CS.border}`, borderRadius: 10,
               boxShadow: "0 12px 40px rgba(0,0,0,0.4)", zIndex: 60, maxHeight: 280, display: "flex", flexDirection: "column",
             }}>
-              <div style={{ padding: "6px 8px", borderBottom: `1px solid ${CS.border}` }}>
+              <div style={{ padding: 0, borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}>
                 <input autoFocus value={catSearch} onChange={(e) => setCatSearch(e.target.value)}
                   placeholder={language === "es" ? "Buscar categoría..." : "Search category..."}
-                  style={{ ...headerInput, width: "100%", border: "none", padding: "4px 6px" }}
+                  style={{ ...headerInput, width: "100%", border: "none", padding: "8px 12px", fontSize: 12 }}
                   onKeyDown={(e) => { if (e.key === "Escape") setCatOpen(false); }}
                 />
               </div>
               <div style={{ overflowY: "auto", flex: 1 }}>
                 {/* No category option */}
                 <button type="button" onClick={() => { patch({ category: null }); setCatOpen(false); }}
-                  style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", cursor: "pointer", color: CS.muted, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", fontStyle: "italic" }}
+                  style={{ width: "100%", textAlign: "left", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", color: CS.muted, fontSize: 13, fontFamily: "var(--font-dm-sans)", fontStyle: "italic" }}
                   onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)"; }}
                   onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "none"; }}>
-                  {t("noCategory", language)}
+                  {language === "es" ? "Sin categoría" : "No category"}
                 </button>
-                {APU_CATEGORIES
-                  .filter((c) => !catSearch || c.toLowerCase().includes(catSearch.toLowerCase()) || (CATEGORY_EN_MAP[c] || "").toLowerCase().includes(catSearch.toLowerCase()))
-                  .map((cat) => (
-                  <button key={cat} type="button"
-                    onClick={() => { patch({ category: cat }); setCatOpen(false); }}
-                    style={{
-                      width: "100%", textAlign: "left", padding: "6px 10px", background: draft.category === cat ? "rgba(249,115,22,0.1)" : "none",
-                      border: "none", cursor: "pointer", color: draft.category === cat ? CS.accent : CS.text,
-                      fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", fontWeight: draft.category === cat ? 600 : 400,
-                    }}
-                    onMouseEnter={(e) => { if (draft.category !== cat) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)"; }}
-                    onMouseLeave={(e) => { if (draft.category !== cat) (e.currentTarget as HTMLButtonElement).style.background = "none"; }}>
-                    {getCategoryLabel(cat, language)}
-                  </button>
-                ))}
+                {CHAPTER_CATEGORIES
+                  .filter((c) => !catSearch || c.es.toLowerCase().includes(catSearch.toLowerCase()) || c.en.toLowerCase().includes(catSearch.toLowerCase()))
+                  .map((cat) => {
+                    const selected = draft.category === cat.es;
+                    return (
+                      <button key={cat.es} type="button"
+                        onClick={() => { patch({ category: cat.es }); setCatOpen(false); }}
+                        className="flex items-center justify-between"
+                        style={{
+                          width: "100%", textAlign: "left", padding: "8px 12px", background: selected ? "rgba(249,115,22,0.1)" : "none",
+                          border: "none", cursor: "pointer", color: selected ? CS.accent : CS.text,
+                          fontSize: 13, fontFamily: "var(--font-dm-sans)", fontWeight: selected ? 600 : 400,
+                        }}
+                        onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)"; }}
+                        onMouseLeave={(e) => { if (!selected) (e.currentTarget as HTMLButtonElement).style.background = selected ? "rgba(249,115,22,0.1)" : "none"; }}>
+                        <span>{language === "es" ? cat.es : cat.en}</span>
+                        {selected && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </button>
+                    );
+                  })}
               </div>
             </div>
           )}
