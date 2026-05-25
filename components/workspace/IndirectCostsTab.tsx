@@ -68,7 +68,7 @@ const SECTIONS: {
   {
     num: 5,
     title: { es: "Utilidad", en: "Profit" },
-    formula: { es: "Costo Neto × util% → Precio de Venta", en: "Net Cost × util% → Selling Price" },
+    formula: { es: "Costo Neto × util% → Precio Unitario Total", en: "Net Cost × util% → Total Unit Price" },
     fields: [
       { key: "util", label: { es: "Utilidad", en: "Profit margin" }, desc: { es: "Margen de ganancia sobre costo neto", en: "Profit margin on net cost" } },
     ],
@@ -76,7 +76,7 @@ const SECTIONS: {
   {
     num: 6,
     title: { es: "Impuestos", en: "Taxes" },
-    formula: { es: "Precio de Venta × tot1% → Precio Unitario Final", en: "Selling Price × tot1% → Final Unit Price" },
+    formula: { es: "Precio Unitario Total × tot1% → Precio Unitario Final", en: "Total Unit Price × tot1% → Final Unit Price" },
     fields: [
       { key: "tot1", label: { es: "IVA", en: "VAT" }, desc: { es: "Impuesto al valor agregado", en: "Value added tax" } },
     ],
@@ -311,7 +311,7 @@ export default function IndirectCostsTab() {
               <PreviewLine label={`+ ${isEs ? "Gastos grls" : "G&A"} (${draft.ggen.pct}%)`} value={`+${f(preview.ggenVal)}`} muted />
               <PreviewSubtotal label={isEs ? "Costo Neto (CN)" : "Net Cost (NC)"} value={f(preview.netCost)} color="#f59e0b" />
               <PreviewLine label={`+ ${isEs ? "Utilidad" : "Profit"} (${draft.util.pct}%)`} value={`+${f(preview.utilVal)}`} muted />
-              <PreviewSubtotal label={isEs ? "Precio Venta (PV)" : "Selling Price (SP)"} value={f(preview.sellPrice)} color="#f97316" />
+              <PreviewSubtotal label={isEs ? "Precio Unitario Total (PUT)" : "Total Unit Price (TUP)"} value={f(preview.sellPrice)} color="#f97316" />
               <PreviewLine label={`+ IVA (${draft.tot1.pct}%)`} value={`+${f(preview.tot1Val)}`} muted />
 
               <div className="my-2" style={{ borderTop: "1px solid var(--cs-border)" }} />
