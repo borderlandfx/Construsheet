@@ -1,35 +1,340 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { cn } from "@/lib/utils";
-import { FolderOpen, Settings } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import {
+  HardHat, Home, Building2, Settings, LogOut, Menu, X,
+} from "lucide-react";
+import type { Locale } from "@/lib/utils/i18n";
 
-const navItems = [
-  { href: "/", label: "Proyectos", icon: FolderOpen },
-  { href: "/settings", label: "Configuración", icon: Settings },
-];
+interface SidebarProps {
+  userId: string;
+  locale: Locale;
+  fullName?: string | null;
+  userEmail: string;
+}
 
-export default function Sidebar() {
+interface ProjectStub {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export default function Sidebar({ userId, locale, fullName, userEmail }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+  const isEs = locale === "es";
+
+  const [projects, setProjects] = useState<ProjectStub[]>([]);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Derive active project ID from URL
+  const activeProjectId = pathname.startsWith("/project/")
+    ? pathname.split("/")[2] ?? null
+    : null;
+
+  useEffect(() => {
+    supabase
+      .from("projects")
+      .select("id, name, status")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setProjects(data as ProjectStub[]);
+      });
+  }, [userId, supabase]);
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push("/auth/login");
+    router.refresh();
+  }
+
+  const displayName = fullName || userEmail.split("@")[0] || "User";
+  const displayInitial = displayName.charAt(0).toUpperCase();
+
+  const content = (
+    <div
+      className="flex flex-col h-full"
+      style={{
+        width: 220,
+        background: "var(--cs-surface)",
+        borderRight: "0.5px solid var(--cs-border)",
+      }}
+    >
+      {/* Logo */}
+      <Link
+        href="/dashboard"
+        onClick={() => setMobileOpen(false)}
+        className="flex items-center gap-2 shrink-0"
+        style={{ padding: "14px 16px", textDecoration: "none" }}
+      >
+        <span
+          className="flex items-center justify-center rounded-lg shrink-0"
+          style={{ width: 28, height: 28, background: "var(--cs-accent)" }}
+        >
+          <HardHat className="h-3.5 w-3.5 text-white" />
+        </span>
+        <span
+          className="font-syne"
+          style={{ fontWeight: 800, fontSize: 14, color: "var(--cs-text)", letterSpacing: "-0.02em" }}
+        >
+          ConstruSheet
+        </span>
+      </Link>
+
+      {/* Navigation */}
+      <nav className="flex flex-col gap-0.5 px-2">
+        <NavItem
+          href="/dashboard"
+          icon={Home}
+          label={isEs ? "Inicio" : "Dashboard"}
+          active={pathname === "/dashboard"}
+          onClick={() => setMobileOpen(false)}
+        />
+      </nav>
+
+      {/* Divider */}
+      <div className="mx-3 my-2" style={{ height: 0.5, background: "var(--cs-border)" }} />
+
+      {/* Projects section */}
+      <div
+        className="font-dm-sans"
+        style={{
+          fontSize: 10,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          color: "var(--cs-muted)",
+          padding: "6px 16px 6px",
+          fontWeight: 600,
+        }}
+      >
+        {isEs ? "Proyectos" : "Projects"}
+      </div>
+
+      {/* Scrollable projects list */}
+      <div
+        className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-0.5 px-2"
+        style={{ maxHeight: "calc(100vh - 300px)" }}
+      >
+        {projects.map((p) => {
+          const isActive = p.id === activeProjectId;
+          return (
+            <Link
+              key={p.id}
+              href={`/project/${p.id}`}
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2 shrink-0"
+              style={{
+                height: 36,
+                padding: "0 12px",
+                borderRadius: 6,
+                margin: "1px 0",
+                fontSize: 13,
+                fontFamily: "var(--font-dm-sans)",
+                textDecoration: "none",
+                cursor: "pointer",
+                transition: "background 150ms",
+                borderLeft: isActive ? "2px solid #f97316" : "2px solid transparent",
+                background: isActive ? "rgba(249,115,22,0.1)" : "transparent",
+                color: isActive ? "var(--cs-text)" : "var(--cs-muted)",
+                fontWeight: isActive ? 600 : 400,
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = "var(--cs-bg2, rgba(255,255,255,0.04))";
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+              }}
+            >
+              <Building2
+                className="h-4 w-4 shrink-0"
+                style={{ color: isActive ? "#f97316" : "var(--cs-muted)" }}
+              />
+              <span className="truncate flex-1">{p.name}</span>
+              <span
+                className="shrink-0 rounded-full"
+                style={{
+                  width: 6,
+                  height: 6,
+                  background: p.status === "active" ? "#22c55e" : "var(--cs-muted)",
+                  opacity: p.status === "active" ? 1 : 0.4,
+                }}
+              />
+            </Link>
+          );
+        })}
+        {projects.length === 0 && (
+          <span
+            className="font-dm-sans text-center py-4"
+            style={{ fontSize: 12, color: "var(--cs-muted)", opacity: 0.6 }}
+          >
+            {isEs ? "Sin proyectos" : "No projects"}
+          </span>
+        )}
+      </div>
+
+      {/* Bottom section */}
+      <div
+        className="shrink-0 flex flex-col gap-1 px-2 pb-3 pt-2"
+        style={{ borderTop: "0.5px solid var(--cs-border)" }}
+      >
+        {/* User info */}
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <span
+            className="flex items-center justify-center rounded-full shrink-0 text-xs font-bold"
+            style={{
+              width: 26,
+              height: 26,
+              background: "rgba(249,115,22,0.15)",
+              color: "#f97316",
+              fontFamily: "var(--font-dm-sans)",
+            }}
+          >
+            {displayInitial}
+          </span>
+          <div className="flex flex-col min-w-0">
+            <span
+              className="font-dm-sans truncate"
+              style={{ fontSize: 12, fontWeight: 500, color: "var(--cs-text)" }}
+            >
+              {displayName}
+            </span>
+            <span
+              className="font-dm-sans truncate"
+              style={{ fontSize: 10, color: "var(--cs-muted)" }}
+            >
+              {userEmail}
+            </span>
+          </div>
+        </div>
+
+        {/* Settings + Logout */}
+        <div className="flex gap-1">
+          <NavItem
+            href="/settings"
+            icon={Settings}
+            label={isEs ? "Ajustes" : "Settings"}
+            active={pathname === "/settings"}
+            onClick={() => setMobileOpen(false)}
+            compact
+          />
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-1.5 flex-1 rounded-md px-2 py-1.5 font-dm-sans"
+            style={{
+              fontSize: 12,
+              border: "none",
+              background: "transparent",
+              color: "var(--cs-muted)",
+              cursor: "pointer",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--cs-bg2, rgba(255,255,255,0.04))";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+            }}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            {isEs ? "Salir" : "Log out"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
-    <aside className="w-56 border-r bg-background hidden md:block">
-      <nav className="flex flex-col gap-1 p-4">
-        {navItems.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground",
-              pathname === href ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </Link>
-        ))}
-      </nav>
-    </aside>
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        className="fixed top-3 left-3 z-50 flex items-center justify-center rounded-lg md:hidden"
+        style={{
+          width: 34,
+          height: 34,
+          border: "1px solid var(--cs-border)",
+          background: "var(--cs-surface)",
+          color: "var(--cs-muted)",
+          cursor: "pointer",
+        }}
+        aria-label="Open menu"
+      >
+        <Menu className="h-4 w-4" />
+      </button>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex fixed left-0 top-[56px] bottom-0 z-30">
+        {content}
+      </aside>
+
+      {/* Mobile overlay sidebar */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div
+            className="absolute inset-0"
+            style={{ background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="relative" style={{ paddingTop: 0 }}>
+            {content}
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="absolute top-3 right-3"
+              style={{ background: "none", border: "none", color: "var(--cs-muted)", cursor: "pointer" }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function NavItem({
+  href,
+  icon: Icon,
+  label,
+  active,
+  onClick,
+  compact,
+}: {
+  href: string;
+  icon: React.ElementType;
+  label: string;
+  active: boolean;
+  onClick?: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`flex items-center gap-2 rounded-md font-dm-sans ${compact ? "flex-1 px-2 py-1.5" : "px-3 py-2"}`}
+      style={{
+        fontSize: compact ? 12 : 13,
+        textDecoration: "none",
+        color: active ? "var(--cs-text)" : "var(--cs-muted)",
+        background: active ? "var(--cs-bg2, rgba(255,255,255,0.06))" : "transparent",
+        fontWeight: active ? 500 : 400,
+        transition: "background 150ms",
+      }}
+      onMouseEnter={(e) => {
+        if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "var(--cs-bg2, rgba(255,255,255,0.04))";
+      }}
+      onMouseLeave={(e) => {
+        if (!active) (e.currentTarget as HTMLAnchorElement).style.background = "transparent";
+      }}
+    >
+      <Icon className="h-4 w-4 shrink-0" />
+      {label}
+    </Link>
   );
 }

@@ -222,10 +222,13 @@ function WorkspaceInner({
   return (
     // Escape layout padding with negative margin; fill remaining viewport below fixed navbar
     <div
+      className="workspace-shell"
       style={{
         margin: "-2rem",
         marginTop: "-2rem",
+        marginLeft: "calc(-2rem - 220px)",
         height: "calc(100vh - 56px)",
+        width: "calc(100vw - 220px)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",

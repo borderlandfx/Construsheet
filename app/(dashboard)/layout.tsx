@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import Navbar from "@/components/layout/Navbar";
+import Sidebar from "@/components/layout/Sidebar";
 import type { Locale } from "@/lib/utils/i18n";
 
 export default async function DashboardLayout({
@@ -37,9 +38,15 @@ export default async function DashboardLayout({
         locale={locale}
         fullName={profile?.full_name}
       />
-      {/* offset for fixed navbar */}
+      <Sidebar
+        userId={user.id}
+        locale={locale}
+        fullName={profile?.full_name}
+        userEmail={user.email ?? ""}
+      />
+      {/* Main content — offset for fixed navbar + sidebar */}
       <main
-        className="mx-auto"
+        className="mx-auto md:ml-[220px]"
         style={{
           paddingTop: "calc(56px + 2rem)",
           paddingBottom: "2rem",
