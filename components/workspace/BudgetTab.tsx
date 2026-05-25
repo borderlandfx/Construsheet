@@ -6,7 +6,7 @@ import {
 import {
   Plus, Trash2, Loader2, X, Search, Import, BookOpen,
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
-  FileText, ArrowDownToLine, TableProperties,
+  FileText, ArrowDownToLine, TableProperties, ChevronRight, ChevronDown,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -52,17 +52,17 @@ const CS = {
 // ─── Status pill ──────────────────────────────────────────────────────────────
 
 const STATUS_CFG = {
-  pending:     { label: { es: "Pendiente",   en: "Pending"      }, bg: "rgba(59,130,246,0.2)",  color: "#60a5fa" },
-  "in-review": { label: { es: "En revisión", en: "Under Review" }, bg: "rgba(245,158,11,0.2)", color: "#f59e0b" },
-  approved:    { label: { es: "Aprobado",    en: "Approved"     }, bg: "rgba(16,185,129,0.2)",  color: "#10b981" },
+  pending:     { label: { es: "Pendiente",   en: "Pending"      }, bg: "#1e3a5f", color: "#60a5fa" },
+  "in-review": { label: { es: "En revisión", en: "Under Review" }, bg: "#3d2e0a", color: "#fbbf24" },
+  approved:    { label: { es: "Aprobado",    en: "Approved"     }, bg: "#064e3b", color: "#34d399" },
 } as const;
 type StatusKey = keyof typeof STATUS_CFG;
 
 function StatusPill({ status, language }: { status: StatusKey; language: Locale }) {
   const cfg = STATUS_CFG[status] ?? STATUS_CFG.pending;
   return (
-    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium font-dm-sans whitespace-nowrap"
-      style={{ background: cfg.bg, color: cfg.color }}>
+    <span className="inline-flex items-center justify-center font-medium font-dm-sans whitespace-nowrap"
+      style={{ background: cfg.bg, color: cfg.color, borderRadius: 20, padding: "3px 10px", fontSize: 11 }}>
       {cfg.label[language]}
     </span>
   );
@@ -1242,9 +1242,11 @@ function RowContextMenu({ menu, sections, currentSection, language, onClose, onM
 // ─── SortableChapterHeader ────────────────────────────────────────────────────
 
 function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDraft, isDragging: isDraggingProp,
+  isCollapsed, onToggleCollapse,
   onContextMenu, onEditChange, onEditBlur, onEditKeyDown }:
   { section: string; secTotal: number; fmt: (n: number) => string; lang: Locale;
     isEditing: boolean; editDraft: string; isDragging?: boolean;
+    isCollapsed?: boolean; onToggleCollapse?: () => void;
     onContextMenu: (e: React.MouseEvent) => void;
     onEditChange: (v: string) => void; onEditBlur: () => void;
     onEditKeyDown: (e: React.KeyboardEvent) => void; }
@@ -1255,6 +1257,7 @@ function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDr
   } = useSortable({ id: `chapter:${section}` });
 
   const dragging = isDraggingProp || isSortDragging;
+  const Chevron = isCollapsed ? ChevronRight : ChevronDown;
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
@@ -1267,28 +1270,36 @@ function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDr
   return (
     <tr ref={setNodeRef} style={style} onContextMenu={onContextMenu}>
       <td
-        colSpan={11}
+        colSpan={20}
         style={{
-          padding: "0",
-          background: "rgba(249,115,22,0.07)",
-          borderTop: `2px solid rgba(249,115,22,0.25)`,
-          borderBottom: `1px solid rgba(249,115,22,0.15)`,
+          padding: 0,
+          background: "rgba(249,115,22,0.15)",
+          borderBottom: `1px solid rgba(249,115,22,0.2)`,
           cursor: "context-menu",
         }}
       >
-        <div className="flex items-center justify-between px-3 py-2">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            {/* Chapter drag handle */}
+        <div className="flex items-center justify-between px-3 py-2 group">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {/* Collapse/expand chevron */}
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleCollapse?.(); }}
+              className="flex items-center justify-center shrink-0"
+              style={{ width: 20, height: 20, background: "none", border: "none", cursor: "pointer", color: "#f97316" }}
+            >
+              <Chevron className="h-3.5 w-3.5" />
+            </button>
+            {/* Chapter drag handle on hover */}
             <button
               {...attributes}
               {...listeners}
               tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
-              className="flex items-center justify-center shrink-0 touch-none"
+              className="items-center justify-center shrink-0 touch-none hidden group-hover:flex"
               style={{
                 width: 20, height: 20, background: "none", border: "none",
                 cursor: dragging ? "grabbing" : "grab",
-                color: "var(--cs-accent)", opacity: 0.5,
+                color: "#f97316", opacity: 0.5,
               }}
               aria-label={lang === "es" ? "Arrastrar para reordenar capítulo" : "Drag to reorder chapter"}
             >
@@ -1303,17 +1314,14 @@ function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDr
                   onBlur={onEditBlur}
                   onKeyDown={onEditKeyDown}
                   className="font-syne font-bold text-xs uppercase tracking-wider bg-transparent outline-none border-b flex-1"
-                  style={{ color: CS.accent, borderColor: CS.accent }}
+                  style={{ color: "#f97316", borderColor: "#f97316" }}
                 />
               </div>
             ) : (
-              <span className="font-syne font-bold text-xs uppercase tracking-wider truncate" style={{ color: CS.accent }}>{section}</span>
+              <span className="font-syne font-bold text-xs uppercase tracking-wider truncate" style={{ color: "#f97316" }}>{section}</span>
             )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-semibold font-dm-sans" style={{ color: CS.accent }}>{fmt(secTotal)}</span>
-            <span className="text-[10px] font-dm-sans opacity-40" style={{ color: CS.muted }}>⋯</span>
-          </div>
+          <span className="text-xs font-bold font-dm-sans shrink-0" style={{ color: "#f97316" }}>{fmt(secTotal)}</span>
         </div>
       </td>
     </tr>
@@ -1356,25 +1364,28 @@ function SortableBudgetRow({
       ? "rgba(249,115,22,0.08)"
       : isSelected
         ? "rgba(249,115,22,0.06)"
-        : isEven ? "rgba(255,255,255,0.015)" : "transparent",
+        : isEven ? "var(--cs-bg2, rgba(255,255,255,0.02))" : "transparent",
     outline: isSelected ? `1px solid rgba(249,115,22,0.2)` : undefined,
     opacity: isDragging ? 0.85 : isDimmed ? 0.28 : 1,
     zIndex: isDragging ? 9 : undefined,
     position: "relative",
   };
 
+  const cellPad = "8px 10px";
+
   return (
     <tr ref={setNodeRef} style={style} className="group cursor-pointer"
       onClick={onSelect}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, row.id); }}>
-      {/* Drag handle */}
-      <td style={{ padding: "7px 4px", textAlign: "center", width: 28 }} className="hidden md:table-cell">
+      {/* # with drag handle on hover */}
+      <td style={{ padding: cellPad, textAlign: "center", width: 40, fontSize: 12, color: "var(--cs-muted)" }}>
+        <span className="group-hover:hidden">{globalRowNum}</span>
         <button
           {...attributes}
           {...listeners}
           tabIndex={-1}
           onClick={(e) => e.stopPropagation()}
-          className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+          className="hidden group-hover:flex items-center justify-center touch-none"
           style={{
             width: 20, height: 20, background: "none", border: "none",
             cursor: "grab", color: "var(--cs-muted)", margin: "0 auto",
@@ -1384,15 +1395,12 @@ function SortableBudgetRow({
           <GripVertical className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "center", fontSize: "0.7rem", color: "var(--cs-muted)" }} className="hidden md:table-cell">
-        {globalRowNum}
-      </td>
-      <td style={{ padding: "7px 10px" }} className="hidden md:table-cell">
+      <td style={{ padding: cellPad }} className="hidden md:table-cell">
         <InlineCell field="code" rawValue={row.code ?? ""}
           displayValue={<code className="text-xs font-mono" style={{ color: "var(--cs-accent)" }}>{row.code ?? "—"}</code>}
           onSave={(v) => onCellSave(row.id, "code", v)} />
       </td>
-      <td style={{ padding: "7px 10px", color: "var(--cs-text)", fontSize: "0.8125rem" }}>
+      <td style={{ padding: cellPad, color: "var(--cs-text)", fontSize: 13 }}>
         <InlineCell field="description" rawValue={row.description}
           displayValue={<>
             {row.description}
@@ -1402,49 +1410,48 @@ function SortableBudgetRow({
           </>}
           onSave={(v) => onCellSave(row.id, "description", v)} />
       </td>
-      <td style={{ padding: "7px 10px", color: "var(--cs-muted)", fontSize: "0.8125rem" }} className="hidden md:table-cell">
+      <td style={{ padding: cellPad, color: "var(--cs-muted)", fontSize: 13, textAlign: "center" }} className="hidden md:table-cell">
         <InlineCell field="unit" rawValue={row.unit ?? ""}
           displayValue={<span>{row.unit ?? "—"}</span>}
           onSave={(v) => onCellSave(row.id, "unit", v)} />
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "right" }} className="hidden md:table-cell">
+      <td style={{ padding: cellPad, textAlign: "right" }} className="hidden md:table-cell">
         <InlineCell field="quantity" rawValue={String(row.quantity)}
-          displayValue={<span style={{ fontSize: "0.8125rem", color: "var(--cs-text)" }}>{row.quantity.toLocaleString()}</span>}
+          displayValue={<span style={{ fontSize: 13, color: "var(--cs-text)" }}>{row.quantity.toLocaleString()}</span>}
           onSave={(v) => onCellSave(row.id, "quantity", v)} />
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "right" }} className="hidden md:table-cell">
+      <td style={{ padding: cellPad, textAlign: "right" }} className="hidden md:table-cell">
         <InlineCell field="unit_price" rawValue={String(row.unit_price)}
-          displayValue={<span style={{ fontSize: "0.8125rem", color: "var(--cs-text)" }}>{fmt(row.unit_price)}</span>}
+          displayValue={<span style={{ fontSize: 13, color: "var(--cs-text)" }}>{fmt(row.unit_price)}</span>}
           onSave={(v) => onCellSave(row.id, "unit_price", v)} />
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "right" }}>
-        <span className="font-semibold" style={{ fontSize: "0.8125rem", color: rowTotal > 0 ? "var(--cs-text)" : "var(--cs-muted)" }}>{fmt(rowTotal)}</span>
+      <td style={{ padding: cellPad, textAlign: "right" }}>
+        <span className="font-semibold" style={{ fontSize: 13, color: rowTotal > 0 ? "var(--cs-text)" : "var(--cs-muted)" }}>{fmt(rowTotal)}</span>
       </td>
-      <td style={{ padding: "6px 10px" }}>
+      <td style={{ padding: cellPad, textAlign: "center" }}>
         <InlineCell field="status" rawValue={row.status}
           displayValue={<StatusPill status={row.status as StatusKey} language={lang} />}
           onSave={(v) => onCellSave(row.id, "status", v)} />
       </td>
-      <td style={{ padding: "7px 10px" }} className="hidden md:table-cell">
+      <td style={{ padding: cellPad, position: "relative" }} className="hidden md:table-cell">
         <InlineCell field="assignee" rawValue={row.assignee ?? ""}
-          displayValue={<span className="flex items-center gap-1.5"><AssigneeAvatar name={row.assignee} />{row.assignee && <span style={{ fontSize: "0.75rem", color: "var(--cs-muted)" }}>{row.assignee.split(/\s+/)[0]}</span>}</span>}
+          displayValue={<span className="flex items-center gap-1.5"><AssigneeAvatar name={row.assignee} />{row.assignee && <span style={{ fontSize: 12, color: "var(--cs-muted)" }}>{row.assignee.split(/\s+/)[0]}</span>}</span>}
           onSave={(v) => onCellSave(row.id, "assignee", v)} />
-      </td>
-      <td style={{ padding: "7px 8px" }} className="hidden md:table-cell">
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Hover action icons */}
+        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
           <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(row); }}
-            title={lang === "es" ? "Duplicar fila" : "Duplicate row"}
+            title={lang === "es" ? "Duplicar" : "Duplicate"}
             className="flex items-center justify-center rounded"
-            style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}
+            style={{ width: 24, height: 24, background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}
             onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = "var(--cs-text)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = "var(--cs-muted)")}>
-            <Copy className="h-3.5 w-3.5" />
+            <Copy className="h-3 w-3" />
           </button>
           <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(row.id); }}
-            title={lang === "es" ? "Eliminar fila" : "Delete row"}
+            title={lang === "es" ? "Eliminar" : "Delete"}
             className="flex items-center justify-center rounded"
-            style={{ width: 26, height: 26, background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}>
-            <Trash2 className="h-3.5 w-3.5" />
+            style={{ width: 24, height: 24, background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}>
+            <Trash2 className="h-3 w-3" />
           </button>
         </div>
       </td>
@@ -1555,6 +1562,16 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     "/": () => budgetSearchRef.current?.focus(),
   }), []);
   useKeyboardShortcuts(budgetShortcuts);
+
+  // Chapter collapse state
+  const [collapsedChapters, setCollapsedChapters] = useState<Set<string>>(new Set());
+  const toggleChapterCollapse = useCallback((sec: string) => {
+    setCollapsedChapters((prev) => {
+      const next = new Set(prev);
+      if (next.has(sec)) next.delete(sec); else next.add(sec);
+      return next;
+    });
+  }, []);
 
   // Row context menu
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
@@ -2132,9 +2149,13 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
 
   // ── Render ────────────────────────────────────────────────────────────────
   const thStyle: React.CSSProperties = {
-    padding: "8px 10px", textAlign: "left", fontSize: "0.7rem", fontWeight: 600,
-    textTransform: "uppercase", letterSpacing: "0.05em", color: CS.muted,
-    background: "rgba(255,255,255,0.03)", borderBottom: `1px solid ${CS.border}`, whiteSpace: "nowrap",
+    padding: "9px 10px", textAlign: "left", fontSize: 11, fontWeight: 600,
+    textTransform: "uppercase", letterSpacing: "0.05em",
+    color: "var(--cs-muted)",
+    background: "var(--cs-bg2, var(--cs-surface))",
+    borderBottom: "1px solid var(--cs-border)",
+    whiteSpace: "nowrap",
+    position: "sticky", top: 0, zIndex: 2,
   };
 
   // Adjust main content right margin when APU panel is open
@@ -2168,44 +2189,9 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     <div className="flex flex-col gap-4" style={{ paddingRight: panelOpen ? 408 : 0, transition: "padding-right 200ms ease" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
-            {lang === "es" ? "Presupuesto de Obra" : "Construction Budget"}
-          </h2>
-          <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
-            {q ? (
-              <>
-                <span style={{ color: CS.accent, fontWeight: 600 }}>{filteredRows.length}</span>
-                {" "}{lang === "es" ? "de" : "of"}{" "}
-                {rows.length} {lang === "es" ? "partidas" : "rows"}
-              </>
-            ) : (
-              <>
-                {rows.length} {lang === "es" ? "partidas" : "rows"} · {sections.length} {lang === "es" ? "capítulos" : "chapters"}
-                {rows.length > 0 && (() => {
-                  const approved = rows.filter((r) => r.status === "approved");
-                  const approvedTotal = approved.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
-                  const approvedPct = grandTotal > 0 ? Math.round((approvedTotal / grandTotal) * 100) : 0;
-                  if (approved.length === 0) return null;
-                  return (
-                    <>
-                      {" · "}
-                      <span style={{ color: "#22c55e", fontWeight: 600 }}>
-                        {fmt(approvedTotal)} {lang === "es" ? "aprobado" : "approved"} ({approvedPct}%)
-                      </span>
-                    </>
-                  );
-                })()}
-              </>
-            )}
-            {!q && (
-              <span className="ml-2 text-[10px] rounded-full px-1.5 py-px" style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa" }}>
-                {lang === "es" ? "Clic derecho en capítulo para opciones" : "Right-click chapter for options"}
-              </span>
-            )}
-          </p>
-        </div>
-        {/* Buttons moved to ContextualToolbar via portal */}
+        <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
+          {lang === "es" ? "Presupuesto de Obra" : "Construction Budget"}
+        </h2>
       </div>
 
       {/* ── Search bar ─────────────────────────────────────── */}
@@ -2279,54 +2265,28 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         </div>
       )}
 
-      {/* ── Approval status bar ────────────────────────────── */}
+      {/* ── Inline summary bar ──────────────────────────────── */}
       {rows.length > 0 && (() => {
-        const approved = rows.filter((r) => r.status === "approved");
-        const review   = rows.filter((r) => r.status === "in-review");
-        const pending  = rows.filter((r) => r.status === "pending");
-        const valOf = (arr: BudgetRow[]) =>
-          arr.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
-        const vApproved = valOf(approved);
-        const vReview   = valOf(review);
-        const vPending  = valOf(pending);
-        const total     = vApproved + vReview + vPending || 1;
-        const pApproved = (vApproved / total) * 100;
-        const pReview   = (vReview   / total) * 100;
-        const pPending  = (vPending  / total) * 100;
-
-        const segments = [
-          { pct: pApproved, color: "#10b981", label: lang === "es" ? "Aprobado"    : "Approved",     count: approved.length, value: vApproved },
-          { pct: pReview,   color: "#f59e0b", label: lang === "es" ? "En revisión" : "Under Review", count: review.length,   value: vReview   },
-          { pct: pPending,  color: "#60a5fa", label: lang === "es" ? "Pendiente"   : "Pending",      count: pending.length,  value: vPending  },
-        ];
+        const itemRows = rows.filter((r) => !r.is_chapter);
+        const approvedCount = itemRows.filter((r) => r.status === "approved").length;
+        const reviewCount   = itemRows.filter((r) => r.status === "in-review").length;
+        const pendingCount  = itemRows.filter((r) => r.status === "pending").length;
+        const approvedVal   = itemRows.filter((r) => r.status === "approved").reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0);
+        const pct = grandTotal > 0 ? Math.round((approvedVal / grandTotal) * 100) : 0;
 
         return (
-          <div className="flex flex-col gap-2 rounded-[10px] p-3"
-            style={{ border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.015)" }}>
-            {/* Segmented bar */}
-            <div className="flex rounded-full overflow-hidden" style={{ height: 6, gap: 2 }}>
-              {segments.map(({ pct, color, label }) => (
-                pct > 0 && (
-                  <div key={label} style={{ width: `${pct}%`, background: color, borderRadius: 9999, transition: "width 0.4s ease" }} />
-                )
-              ))}
-            </div>
-            {/* Labels */}
-            <div className="flex items-center gap-4 flex-wrap">
-              {segments.map(({ color, label, count, value }) => (
-                <div key={label} className="flex items-center gap-1.5">
-                  <span className="rounded-full shrink-0" style={{ width: 6, height: 6, background: color, display: "inline-block" }} />
-                  <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
-                    {label}
-                    <span className="ml-1 font-semibold" style={{ color: CS.text }}>{count}</span>
-                    <span className="ml-1 opacity-60">{fmt(value)}</span>
-                  </span>
-                </div>
-              ))}
-              <span className="ml-auto text-xs font-dm-sans font-semibold" style={{ color: CS.accent }}>
-                {pApproved.toFixed(0)}% {lang === "es" ? "aprobado" : "approved"}
-              </span>
-            </div>
+          <div className="flex items-center gap-3 flex-wrap font-dm-sans" style={{ fontSize: 12, color: CS.muted }}>
+            <span>{itemRows.length} {lang === "es" ? "partidas" : "items"} · {sections.length} {lang === "es" ? "capítulos" : "chapters"}</span>
+            <span className="hidden md:inline" style={{ color: "var(--cs-border)" }}>|</span>
+            <span className="hidden md:flex items-center gap-1"><span className="rounded-full" style={{ width: 6, height: 6, background: "#34d399", display: "inline-block" }} />{lang === "es" ? "Aprobado" : "Approved"} {approvedCount}</span>
+            <span className="hidden md:flex items-center gap-1"><span className="rounded-full" style={{ width: 6, height: 6, background: "#fbbf24", display: "inline-block" }} />{lang === "es" ? "En revisión" : "Review"} {reviewCount}</span>
+            <span className="hidden md:flex items-center gap-1"><span className="rounded-full" style={{ width: 6, height: 6, background: "#60a5fa", display: "inline-block" }} />{lang === "es" ? "Pendiente" : "Pending"} {pendingCount}</span>
+            <span className="ml-auto flex items-center gap-2">
+              <span className="font-semibold" style={{ color: "#34d399" }}>{pct}% {lang === "es" ? "aprobado" : "approved"}</span>
+              <div style={{ width: 60, height: 5, borderRadius: 3, background: "var(--cs-border)", overflow: "hidden" }}>
+                <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: "#34d399", transition: "width 0.3s ease" }} />
+              </div>
+            </span>
           </div>
         );
       })()}
@@ -2365,17 +2325,15 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
             <table className="w-full font-dm-sans" style={{ minWidth: "auto" }}>
               <thead>
                 <tr>
-                  <th style={{ ...thStyle, width: 28 }} className="hidden md:table-cell" />
-                  <th style={{ ...thStyle, width: 36, textAlign: "center" }} className="hidden md:table-cell">#</th>
-                  <th style={{ ...thStyle, width: 70 }} className="hidden md:table-cell">{lang === "es" ? "Código" : "Code"}</th>
+                  <th style={{ ...thStyle, width: 40, textAlign: "center" }}>#</th>
+                  <th style={{ ...thStyle, width: 80 }} className="hidden md:table-cell">{lang === "es" ? "Código" : "Code"}</th>
                   <th style={thStyle}>{lang === "es" ? "Descripción" : "Description"}</th>
-                  <th style={{ ...thStyle, width: 60 }} className="hidden md:table-cell">{lang === "es" ? "Unidad" : "Unit"}</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 80 }} className="hidden md:table-cell">{lang === "es" ? "Cantidad" : "Qty"}</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 110 }} className="hidden md:table-cell">{lang === "es" ? "P.U." : "Unit Price"}</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 110 }}>Total</th>
-                  <th style={{ ...thStyle, width: 100 }}>{lang === "es" ? "Estatus" : "Status"}</th>
-                  <th style={{ ...thStyle, width: 130 }} className="hidden md:table-cell">{lang === "es" ? "Responsable" : "Assignee"}</th>
-                  <th style={{ ...thStyle, width: 40 }} className="hidden md:table-cell" />
+                  <th style={{ ...thStyle, width: 80, textAlign: "center" }} className="hidden md:table-cell">{lang === "es" ? "Unidad" : "Unit"}</th>
+                  <th style={{ ...thStyle, textAlign: "right", width: 90 }} className="hidden md:table-cell">{lang === "es" ? "Cantidad" : "Qty"}</th>
+                  <th style={{ ...thStyle, textAlign: "right", width: 110 }} className="hidden md:table-cell">P.U.</th>
+                  <th style={{ ...thStyle, textAlign: "right", width: 120 }}>Total</th>
+                  <th style={{ ...thStyle, width: 110, textAlign: "center" }}>{lang === "es" ? "Estatus" : "Status"}</th>
+                  <th style={{ ...thStyle, width: 120 }} className="hidden md:table-cell">{lang === "es" ? "Responsable" : "Assignee"}</th>
                 </tr>
               </thead>
               <SortableContext items={sections.map((s) => `chapter:${s}`)} strategy={verticalListSortingStrategy}>
@@ -2401,6 +2359,8 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
                             lang={lang}
                             isEditing={editingSection === sec}
                             editDraft={editSectionDraft}
+                            isCollapsed={collapsedChapters.has(sec)}
+                            onToggleCollapse={() => toggleChapterCollapse(sec)}
                             onContextMenu={(e) => handleChapterCtxMenu(e, sec)}
                             onEditChange={(v) => setEditSectionDraft(v)}
                             onEditBlur={() => handleRenameSection(sec, editSectionDraft)}
@@ -2411,6 +2371,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
                           />
 
                           {/* ── Sortable data rows ── */}
+                          {!collapsedChapters.has(sec) && (
                           <SortableContext items={secRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                             {secRows.map((row, rowIdx) => {
                               const globalRowNum = secStartNum + rowIdx + 1;
@@ -2433,19 +2394,24 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
                               );
                             })}
                           </SortableContext>
+                          )}
                         </Fragment>
                       );
                     })}
                   </tbody>
                 </SortableContext>
 
-              <tfoot>
+              <tfoot style={{ position: "sticky", bottom: 0, zIndex: 2 }}>
                 <tr>
-                  <td colSpan={7} style={{ padding: "10px 12px", textAlign: "right", fontFamily: "var(--font-dm-sans)", fontSize: "0.8125rem", fontWeight: 600, color: CS.muted, background: "rgba(249,115,22,0.05)", borderTop: `1px solid rgba(249,115,22,0.2)` }}>
+                  <td colSpan={6} className="hidden md:table-cell" style={{ padding: "12px 10px", textAlign: "right", fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: CS.muted, background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
                     {lang === "es" ? "TOTAL DEL PRESUPUESTO" : "BUDGET TOTAL"}
                   </td>
-                  <td style={{ padding: "10px 12px", textAlign: "right", background: "rgba(249,115,22,0.05)", borderTop: `1px solid rgba(249,115,22,0.2)` }}>
-                    <span className="font-syne font-bold text-lg" style={{ color: CS.accent }}>
+                  {/* Mobile label */}
+                  <td colSpan={2} className="md:hidden" style={{ padding: "12px 10px", fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color: CS.muted, background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
+                    {lang === "es" ? "TOTAL" : "TOTAL"}
+                  </td>
+                  <td style={{ padding: "12px 10px", textAlign: "right", background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
+                    <span className="font-syne font-bold text-lg" style={{ color: "#f97316" }}>
                       {fmt(filteredIds !== null
                         ? filteredRows.reduce((s, r) => s + (r.total ?? r.quantity * r.unit_price), 0)
                         : grandTotal)}
@@ -2456,7 +2422,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
                       </span>
                     )}
                   </td>
-                  <td colSpan={3} style={{ background: "rgba(249,115,22,0.05)", borderTop: `1px solid rgba(249,115,22,0.2)` }} />
+                  <td colSpan={3} style={{ background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }} className="hidden md:table-cell" />
                 </tr>
               </tfoot>
             </table>
