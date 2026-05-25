@@ -12,7 +12,8 @@ import {
   AlertCircle,
   FileText,
   Printer,
-  Activity,
+  BarChart3,
+  ArrowRight,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
@@ -202,7 +203,7 @@ function DonutCenterLabel({ viewBox, value }: { viewBox?: { cx: number; cy: numb
 
 export default function ReportsTab() {
   const supabaseRef = useRef(createClient());
-  const { projectId, language, fmt } = useWorkspace();
+  const { projectId, language, fmt, setActiveTab } = useWorkspace();
   const { toast } = useToast();
   const lang = language as Locale;
 
@@ -401,18 +402,26 @@ export default function ReportsTab() {
   if (itemRows.length === 0) {
     return (
       <div
-        className="flex flex-col items-center justify-center py-16 rounded-xl text-center gap-3"
-        style={{ border: "2px dashed var(--color-border-tertiary)" }}
+        className="flex flex-col items-center justify-center rounded-xl text-center gap-4"
+        style={{ padding: "60px 24px" }}
       >
-        <Activity className="h-10 w-10 opacity-50" style={{ color: "var(--color-text-secondary)" }} />
-        <p className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>
+        <BarChart3 className="h-12 w-12" style={{ color: "var(--cs-muted)" }} />
+        <p className="font-dm-sans font-medium" style={{ fontSize: 18, color: "var(--cs-text)" }}>
           {lang === "es" ? "Sin datos para reportar" : "No data to report yet"}
         </p>
-        <p className="text-sm max-w-sm" style={{ color: "var(--color-text-secondary)" }}>
+        <p className="text-sm font-dm-sans" style={{ color: "var(--cs-muted)", maxWidth: 400, textAlign: "center" }}>
           {lang === "es"
-            ? "Agrega partidas en la pestaña de Presupuesto para ver el reporte aquí."
-            : "Add budget rows in the Budget tab to see the report here."}
+            ? "Agrega partidas a tu presupuesto para ver reportes y gráficas"
+            : "Add items to your budget to see reports and charts"}
         </p>
+        <button
+          onClick={() => setActiveTab("budget")}
+          className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+          style={{ background: "var(--cs-accent)", color: "#fff", border: "none", cursor: "pointer" }}
+        >
+          <ArrowRight className="h-4 w-4" />
+          {lang === "es" ? "Ir al Presupuesto" : "Go to Budget"}
+        </button>
       </div>
     );
   }

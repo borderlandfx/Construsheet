@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus, Trash2, Pencil, Loader2, X,
   Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText, Download, Sparkles,
+  FileSpreadsheet, Info,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
@@ -1520,24 +1521,22 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
 
       {/* Empty state */}
       {items.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 rounded-[10px] text-center gap-4"
-          style={{ border: `1.5px dashed ${CS.border}` }}>
-          <p className="font-syne font-bold text-base" style={{ color: CS.text }}>
-            {lang === "es" ? "No hay APUs" : "No APU items"}
+        <div className="flex flex-col items-center justify-center rounded-[10px] text-center gap-4"
+          style={{ padding: "60px 24px" }}>
+          <FileSpreadsheet className="h-12 w-12" style={{ color: CS.muted }} />
+          <p className="font-dm-sans font-medium" style={{ fontSize: 18, color: CS.text }}>
+            {lang === "es" ? "No hay análisis de precios" : "No unit price analyses yet"}
           </p>
-          <p className="text-sm font-dm-sans max-w-xs" style={{ color: CS.muted }}>
-            {lang === "es" ? "Crea uno manualmente o usa IA para generarlo desde una descripción." : "Create one manually or use AI to generate it from a description."}
+          <p className="text-sm font-dm-sans" style={{ color: CS.muted, maxWidth: 400, textAlign: "center" }}>
+            {lang === "es"
+              ? "Crea tu primer APU para comenzar a construir tu presupuesto"
+              : "Create your first APU to start building your budget"}
           </p>
-          <div className="flex gap-2">
-            <button onClick={onNew} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-              style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
-              <Plus className="h-4 w-4" />{lang === "es" ? "Nuevo APU" : "New APU"}
-            </button>
-            <button onClick={onAI} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-              style={{ background: "rgba(249,115,22,0.1)", border: `1px solid rgba(249,115,22,0.3)`, color: CS.accent, cursor: "pointer" }}>
-              <span>✦</span>{lang === "es" ? "Usar IA" : "Use AI"}
-            </button>
-          </div>
+          <button onClick={onNew} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
+            <Plus className="h-4 w-4" />{lang === "es" ? "Nuevo APU" : "New APU"}
+          </button>
+          <ApuTooltip lang={lang} />
         </div>
       )}
 
@@ -1919,6 +1918,33 @@ function SendToBudgetModal({
 // ─── Main APUTab ──────────────────────────────────────────────────────────────
 
 type View = { kind: "list" } | { kind: "editor"; draft: EditorDraft };
+
+function ApuTooltip({ lang }: { lang: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => setShow((v) => !v)}
+        className="flex items-center gap-1 text-xs font-dm-sans"
+        style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}
+      >
+        <Info className="h-3.5 w-3.5" />
+        {lang === "es" ? "¿Qué es un APU?" : "What is a UPA?"}
+      </button>
+      {show && (
+        <span
+          className="absolute left-1/2 mt-2 -translate-x-1/2 rounded-lg text-xs font-dm-sans p-3 z-50"
+          style={{ background: "var(--cs-surface)", border: "1px solid var(--cs-border)", color: "var(--cs-text)", maxWidth: 320, textAlign: "left", whiteSpace: "normal" }}
+        >
+          {lang === "es"
+            ? "El Análisis de Precios Unitarios (APU) desglosa el costo de cada actividad en materiales, mano de obra y equipo. Es la base para construir un presupuesto preciso."
+            : "A Unit Price Analysis (UPA) breaks down the cost of each activity into materials, labor, and equipment. It is the foundation for building an accurate budget."}
+        </span>
+      )}
+    </span>
+  );
+}
 
 interface APUTabProps {
   initialItems: ApuItem[];

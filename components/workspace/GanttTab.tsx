@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Trash2, Loader2, X,
   Download, Copy, ChevronRight, ChevronDown,
-  FileText, LayoutList, CalendarDays, Lock,
+  FileText, LayoutList, CalendarDays, Lock, CalendarOff, ArrowRight,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
@@ -457,7 +457,7 @@ interface GanttTabProps {
 
 export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange }: GanttTabProps) {
   const supabase = createClient();
-  const { projectId, language } = useWorkspace();
+  const { projectId, language, setActiveTab } = useWorkspace();
   const { toast } = useToast();
 
   const [tasks, setTasks] = useState<GanttTask[]>(
@@ -985,22 +985,31 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       {/* ── Empty state ────────────────────────────────────── */}
       {!loading && tasks.length === 0 && (
         <div
-          className="flex flex-col items-center justify-center py-16 rounded-[10px] text-center gap-3"
-          style={{ border: `1.5px dashed ${CS.border}` }}
+          className="flex flex-col items-center justify-center rounded-[10px] text-center gap-4"
+          style={{ padding: "60px 24px" }}
         >
-          <p className="font-syne font-bold text-base" style={{ color: CS.text }}>
+          <CalendarOff className="h-12 w-12" style={{ color: CS.muted }} />
+          <p className="font-dm-sans font-medium" style={{ fontSize: 18, color: CS.text }}>
             {lang === "es"
-              ? "Sin tareas en el cronograma"
-              : "No tasks in the schedule"}
+              ? "Sin actividades programadas"
+              : "No scheduled activities"}
           </p>
           <p
-            className="text-sm font-dm-sans max-w-xs"
-            style={{ color: CS.muted }}
+            className="text-sm font-dm-sans"
+            style={{ color: CS.muted, maxWidth: 400, textAlign: "center" }}
           >
             {lang === "es"
-              ? "Agrega partidas en la pestaña de Presupuesto para verlas aquí."
-              : "Add items in the Budget tab to see them here."}
+              ? "Las actividades aparecen automáticamente cuando agregas partidas al presupuesto"
+              : "Activities appear automatically when you add items to the budget"}
           </p>
+          <button
+            onClick={() => setActiveTab("budget")}
+            className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
+          >
+            <ArrowRight className="h-4 w-4" />
+            {lang === "es" ? "Ir al Presupuesto" : "Go to Budget"}
+          </button>
         </div>
       )}
 

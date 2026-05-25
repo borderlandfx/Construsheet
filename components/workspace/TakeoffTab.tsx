@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Plus, Trash2, Loader2, X, Download, ArrowRight, GripVertical, ClipboardPaste, FileText, Search } from "lucide-react";
+import { Plus, Trash2, Loader2, X, Download, ArrowRight, GripVertical, ClipboardPaste, FileText, Search, Ruler } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
   TBtn, TBtnPrimary,
@@ -1209,39 +1209,27 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
       {/* ── Empty state ──────────────────────────────────────── */}
       {items.length === 0 && (
         <div
-          className="flex flex-col items-center justify-center py-20 rounded-[10px] text-center gap-4"
-          style={{ border: `1.5px dashed ${CS.border}` }}
+          className="flex flex-col items-center justify-center rounded-[10px] text-center gap-4"
+          style={{ padding: "60px 24px" }}
         >
-          <p className="font-syne font-bold text-base" style={{ color: CS.text }}>
-            {lang === "es" ? "Sin elementos de cubicación" : "No takeoff elements yet"}
+          <Ruler className="h-12 w-12" style={{ color: CS.muted }} />
+          <p className="font-dm-sans font-medium" style={{ fontSize: 18, color: CS.text }}>
+            {lang === "es" ? "Sin generadores" : "No takeoff sheets yet"}
           </p>
-          <p className="text-sm font-dm-sans max-w-xs" style={{ color: CS.muted }}>
+          <p className="text-sm font-dm-sans" style={{ color: CS.muted, maxWidth: 400, textAlign: "center" }}>
             {lang === "es"
-              ? "Agrega elementos para calcular las cantidades de obra."
-              : "Add elements to calculate project quantities."}
+              ? "Los generadores te ayudan a calcular cantidades de obra"
+              : "Takeoff sheets help you calculate work quantities"}
           </p>
-          <div className="flex gap-2 flex-wrap justify-center">
-            <button
-              type="button"
-              onClick={() => setShowAdd(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-              style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
-            >
-              <Plus className="h-4 w-4" />
-              {lang === "es" ? "Agregar primer elemento" : "Add first element"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowPaste(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-              style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
-              onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.text)}
-              onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = CS.muted)}
-            >
-              <ClipboardPaste className="h-4 w-4" />
-              {lang === "es" ? "Pegar desde Excel" : "Paste from Excel"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
+            style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}
+          >
+            <Plus className="h-4 w-4" />
+            {lang === "es" ? "Nuevo generador" : "New generator"}
+          </button>
         </div>
       )}
 

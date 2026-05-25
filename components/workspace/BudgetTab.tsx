@@ -6,7 +6,7 @@ import {
 import {
   Plus, Trash2, Loader2, X, Search, Import, BookOpen,
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
-  FileText, ArrowDownToLine,
+  FileText, ArrowDownToLine, TableProperties,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
@@ -2322,29 +2322,25 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
 
       {/* ── Empty state ────────────────────────────────────── */}
       {rows.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 rounded-[10px] text-center gap-4"
-          style={{ border: `1.5px dashed ${CS.border}` }}>
-          <p className="font-syne font-bold text-base" style={{ color: CS.text }}>{lang === "es" ? "Sin partidas presupuestales" : "No budget rows yet"}</p>
-          <p className="text-sm font-dm-sans max-w-xs" style={{ color: CS.muted }}>
-            {lang === "es" ? "Agrega partidas manualmente o importa desde los APUs del proyecto." : "Add rows manually or import from the project's APU items."}
+        <div className="flex flex-col items-center justify-center rounded-[10px] text-center gap-4"
+          style={{ padding: "60px 24px" }}>
+          <TableProperties className="h-12 w-12" style={{ color: CS.muted }} />
+          <p className="font-dm-sans font-medium" style={{ fontSize: 18, color: CS.text }}>
+            {lang === "es" ? "Presupuesto vacío" : "Empty budget"}
+          </p>
+          <p className="text-sm font-dm-sans" style={{ color: CS.muted, maxWidth: 400, textAlign: "center" }}>
+            {lang === "es"
+              ? "Agrega partidas manualmente o importa tus APUs al presupuesto"
+              : "Add items manually or import your APUs to the budget"}
           </p>
           <div className="flex gap-2 flex-wrap justify-center">
             <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
               style={{ background: CS.accent, color: "#fff", border: "none", cursor: "pointer" }}>
-              <Plus className="h-4 w-4" />{lang === "es" ? "Agregar Partida" : "Add Row"}
+              <Plus className="h-4 w-4" />{lang === "es" ? "Agregar partida" : "Add item"}
             </button>
             <button onClick={() => setShowImport(true)} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
               style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
               <Import className="h-4 w-4" />{lang === "es" ? "Importar APU" : "Import APU"}
-            </button>
-            <button onClick={() => setShowLibrary(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-              style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
-              {lang === "es" ? "Importar desde Biblioteca" : "Import from Library"}
-            </button>
-            <button onClick={() => setShowPaste(true)} className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-              style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
-              <ClipboardPaste className="h-4 w-4" />{lang === "es" ? "Pegar Excel" : "Paste Excel"}
             </button>
           </div>
         </div>
