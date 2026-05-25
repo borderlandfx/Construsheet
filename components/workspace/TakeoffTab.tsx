@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Plus, Trash2, Loader2, X, Download, ArrowRight, GripVertical, ClipboardPaste, FileText, Search, Ruler } from "lucide-react";
+import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
   TBtn, TBtnPrimary,
@@ -798,6 +799,12 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
   const [sendingAll, setSendingAll]     = useState(false);
   const [search, setSearch]             = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  const takeoffShortcuts = useMemo(() => ({
+    n: () => setShowAdd(true),
+    N: () => setShowAdd(true),
+  }), []);
+  useKeyboardShortcuts(takeoffShortcuts);
 
   // ── Realtime ────────────────────────────────────────────────────────────────
   useEffect(() => {

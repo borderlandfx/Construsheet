@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Check, Settings2 } from "lucide-react";
+import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
+import KeyboardShortcutsHelp from "@/components/workspace/KeyboardShortcutsHelp";
 import { createClient } from "@/lib/supabase/client";
 import { WorkspaceProvider, useWorkspace } from "@/lib/context/WorkspaceContext";
 import TabBar from "@/components/workspace/TabBar";
@@ -192,7 +194,19 @@ function WorkspaceInner({
   const { language, projectId, activeTab, setActiveTab } = useWorkspace();
   const isEs = language === "es";
   const [showCosts, setShowCosts] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const userInitial = userEmail.charAt(0);
+
+  const tabKeys = useMemo(() => ({
+    "1": () => setActiveTab("apu"),
+    "2": () => setActiveTab("budget"),
+    "3": () => setActiveTab("gantt"),
+    "4": () => setActiveTab("takeoff"),
+    "5": () => setActiveTab("reports"),
+    "?": () => setShowShortcuts(true),
+    "Escape": () => { setShowCosts(false); setShowShortcuts(false); },
+  }), [setActiveTab]);
+  useKeyboardShortcuts(tabKeys);
 
   // Live tab counts — updated by each tab's realtime subscription
   const [counts, setCounts] = useState({
@@ -323,6 +337,9 @@ function WorkspaceInner({
       {showCosts && (
         <IndirectCostsPanel onClose={() => setShowCosts(false)} />
       )}
+
+      {/* ── Keyboard shortcuts help ──────────────────── */}
+      <KeyboardShortcutsHelp isOpen={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </div>
   );
 }

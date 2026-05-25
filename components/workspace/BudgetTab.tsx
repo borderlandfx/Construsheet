@@ -9,6 +9,7 @@ import {
   FileText, ArrowDownToLine, TableProperties,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
   TBtn, TBtnPrimary,
@@ -1546,6 +1547,14 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   // Search / filter
   const [budgetSearch, setBudgetSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "in-review" | "approved">("all");
+  const budgetSearchRef = useRef<HTMLInputElement>(null);
+
+  const budgetShortcuts = useMemo(() => ({
+    n: () => setShowAdd(true),
+    N: () => setShowAdd(true),
+    "/": () => budgetSearchRef.current?.focus(),
+  }), []);
+  useKeyboardShortcuts(budgetShortcuts);
 
   // Row context menu
   const [rowContextMenu, setRowContextMenu] = useState<RowContextMenuState | null>(null);
@@ -2208,6 +2217,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
               style={{ color: CS.muted }}
             />
             <input
+              ref={budgetSearchRef}
               value={budgetSearch}
               onChange={(e) => setBudgetSearch(e.target.value)}
               placeholder={lang === "es" ? "Buscar partida, código, capítulo…" : "Search row, code, chapter…"}

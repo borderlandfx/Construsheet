@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   Plus, Trash2, Pencil, Loader2, X,
   Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText, Download, Sparkles,
   FileSpreadsheet, Info,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
   TBtn, TBtnPrimary, TBtnAI,
@@ -1947,6 +1948,12 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [search, setSearch]           = useState("");
   const [sendItem, setSendItem]       = useState<ApuItem | null>(null); // APU → Budget modal
+
+  const apuShortcuts = useMemo(() => ({
+    n: () => { if (view.kind === "list") setView({ kind: "editor", draft: { ...EMPTY_DRAFT } }); },
+    N: () => { if (view.kind === "list") setView({ kind: "editor", draft: { ...EMPTY_DRAFT } }); },
+  }), [view.kind]);
+  useKeyboardShortcuts(apuShortcuts);
 
   // ── realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
