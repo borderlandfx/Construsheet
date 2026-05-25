@@ -56,7 +56,7 @@ export const CHAPTER_CATEGORIES = [
   { es: "Mobiliario y Equipo",           en: "Furniture & Equipment" },
   { es: "Equipo Contra Incendio",        en: "Fire Protection" },
   { es: "Soportería",                    en: "Supports" },
-  { es: "Polotes",                       en: "Piles" },
+  { es: "Pilotes",                       en: "Piles" },
 ] as const;
 
 // Build lookup map: es name → en name (canonical key is always the es value)
