@@ -73,7 +73,7 @@ export interface Database {
           email: string;
           full_name: string | null;
           language: "es" | "en";
-          currency_pref: "USD" | "MXN" | "COP";
+          currency_pref: "USD" | "MXN";
           default_indirect_costs: ProjectIndirectCosts | null;
           created_at: string;
         };
@@ -82,7 +82,7 @@ export interface Database {
           email: string;
           full_name?: string | null;
           language?: "es" | "en";
-          currency_pref?: "USD" | "MXN" | "COP";
+          currency_pref?: "USD" | "MXN";
           default_indirect_costs?: ProjectIndirectCosts | null;
           created_at?: string;
         };
@@ -91,7 +91,7 @@ export interface Database {
           email?: string;
           full_name?: string | null;
           language?: "es" | "en";
-          currency_pref?: "USD" | "MXN" | "COP";
+          currency_pref?: "USD" | "MXN";
           default_indirect_costs?: ProjectIndirectCosts | null;
         };
         Relationships: [];
@@ -398,7 +398,7 @@ export interface Database {
 
     Enums: {
       language: "es" | "en";
-      currency_pref: "USD" | "MXN" | "COP";
+      currency_pref: "USD" | "MXN";
       project_status: "active" | "archived" | "completed";
       row_status: "approved" | "in-review" | "pending";
       task_status: "approved" | "in-review" | "pending";

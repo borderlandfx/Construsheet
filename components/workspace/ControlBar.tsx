@@ -100,7 +100,6 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
         >
           <option value="USD">USD</option>
           <option value="MXN">MXN</option>
-          <option value="COP">COP</option>
         </select>
 
         {/* Unit system toggle */}

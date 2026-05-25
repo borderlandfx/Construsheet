@@ -27,7 +27,7 @@ export default function CreateProjectModal({
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [currency, setCurrency] = useState<"USD" | "MXN" | "COP">("MXN");
+  const [currency, setCurrency] = useState<"USD" | "MXN">("MXN");
 
   function reset() {
     setName("");
@@ -242,7 +242,6 @@ export default function CreateProjectModal({
                   {([
                     { value: "MXN", label: "MXN — Peso mexicano" },
                     { value: "USD", label: "USD — Dólar" },
-                    { value: "COP", label: "COP — Peso colombiano" },
                   ] as const).map(({ value: c, label }) => (
                     <button
                       key={c}

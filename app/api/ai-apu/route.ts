@@ -23,9 +23,7 @@ function buildSystemPrompt(language: string, currency: string, unitSys: string):
 }`;
 
   const marketCtx =
-    currency === "COP"
-      ? (language === "es" ? "mercado colombiano (Bogotá/Medellín)" : "Colombian construction market (Bogotá/Medellín)")
-      : (language === "es" ? "mercado mexicano/colombiano" : "Mexican/Colombian construction market");
+    language === "es" ? "mercado mexicano" : "Mexican construction market";
 
   if (language === "es") {
     return `Eres un ingeniero civil experto en construcción latinoamericana (México y Colombia), \

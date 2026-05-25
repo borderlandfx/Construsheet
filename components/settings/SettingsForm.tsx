@@ -350,7 +350,6 @@ export default function SettingsForm({
               options={[
                 { value: "MXN", label: "MXN" },
                 { value: "USD", label: "USD" },
-                { value: "COP", label: "COP" },
               ]}
               value={currency}
               onChange={(v) => { setCurrency(v); setSaved(false); }}
