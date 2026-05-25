@@ -6,6 +6,7 @@ import {
   Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText, Download, Sparkles,
   FileSpreadsheet, Info,
 } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
   TBtn, TBtnPrimary, TBtnAI,
@@ -1168,34 +1169,17 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
       </td>
       {showConfirm && (
         <td colSpan={0} style={{ position: "absolute", left: 0, top: 0, width: 0, height: 0, overflow: "visible", border: "none", padding: 0 }}>
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.5)" }} onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}>
-            <div className="rounded-xl p-6 shadow-2xl" style={{ background: CS.surface, border: `1px solid ${CS.border}`, maxWidth: 400, width: "100%" }} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-3 mb-4">
-                <Trash2 className="h-5 w-5" style={{ color: "#ef4444" }} />
-                <h3 className="font-semibold font-dm-sans" style={{ color: CS.text }}>
-                  {_language === "es" ? "Eliminar este APU" : "Delete this APU"}
-                </h3>
-              </div>
-              <p className="text-sm mb-6 font-dm-sans" style={{ color: CS.muted }}>
-                {_language === "es"
-                  ? `¿Eliminar "${item.description}"? Esta acción no se puede deshacer.`
-                  : `Delete "${item.description}"? This cannot be undone.`}
-              </p>
-              <div className="flex justify-end gap-3">
-                <button onClick={(e) => { e.stopPropagation(); setShowConfirm(false); }}
-                  className="px-4 py-2 rounded-lg text-sm font-dm-sans"
-                  style={{ border: `1px solid ${CS.border}`, background: CS.surface, color: CS.text, cursor: "pointer" }}>
-                  {_language === "es" ? "Cancelar" : "Cancel"}
-                </button>
-                <button onClick={(e) => { e.stopPropagation(); setShowConfirm(false); setDeleting(true); onDelete(); }}
-                  disabled={deleting}
-                  className="px-4 py-2 rounded-lg text-sm font-dm-sans"
-                  style={{ background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }}>
-                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : (_language === "es" ? "Eliminar" : "Delete")}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            isOpen={showConfirm}
+            title={_language === "es" ? "¿Eliminar APU?" : "Delete APU?"}
+            message={_language === "es"
+              ? `Esta acción no se puede deshacer. Se eliminará '${item.description}' permanentemente.`
+              : `This action cannot be undone. '${item.description}' will be permanently deleted.`}
+            confirmLabel={_language === "es" ? "Eliminar" : "Delete"}
+            cancelLabel={_language === "es" ? "Cancelar" : "Cancel"}
+            onCancel={() => setShowConfirm(false)}
+            onConfirm={() => { setShowConfirm(false); setDeleting(true); onDelete(); }}
+          />
         </td>
       )}
     </tr>

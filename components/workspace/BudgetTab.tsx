@@ -8,6 +8,7 @@ import {
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
   FileText, ArrowDownToLine, TableProperties,
 } from "lucide-react";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
   TBtn, TBtnPrimary,
@@ -2502,59 +2503,43 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
       )}
 
       {/* ── Delete chapter confirmation ─────────────────────── */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-          <div className="flex flex-col gap-4 p-6 rounded-2xl" style={{ background: CS.surface, border: `1px solid ${CS.border}`, maxWidth: 380, width: "100%" }}>
-            <div className="flex items-center gap-2">
-              <Trash2 className="h-5 w-5" style={{ color: "#ef4444" }} />
-              <span className="font-syne font-bold text-base" style={{ color: CS.text }}>{lang === "es" ? "Eliminar capítulo" : "Delete chapter"}</span>
-            </div>
-            <p className="text-sm font-dm-sans" style={{ color: CS.muted }}>
-              {lang === "es"
-                ? `¿Eliminar "${deleteConfirm}" y todas sus partidas? Esta acción no se puede deshacer.`
-                : `Delete "${deleteConfirm}" and all its rows? This cannot be undone.`}
-            </p>
-            <div className="flex gap-2 justify-end">
-              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-                style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
-                {lang === "es" ? "Cancelar" : "Cancel"}
-              </button>
-              <button onClick={() => handleDeleteSection(deleteConfirm!)} className="px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-                style={{ background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }}>
-                {lang === "es" ? "Eliminar" : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {deleteConfirm && (() => {
+        const chapterItemCount = rows.filter((r) => r.section === deleteConfirm && !r.is_chapter).length;
+        return (
+          <ConfirmDialog
+            isOpen={!!deleteConfirm}
+            title={lang === "es" ? "¿Eliminar capítulo?" : "Delete chapter?"}
+            message={lang === "es"
+              ? `Se eliminará el capítulo '${deleteConfirm}' y todas sus ${chapterItemCount} partidas permanentemente.`
+              : `Chapter '${deleteConfirm}' and all its ${chapterItemCount} items will be permanently deleted.`}
+            warning={lang === "es"
+              ? "⚠ Esto también eliminará las tareas correspondientes en el Cronograma."
+              : "⚠ This will also delete the corresponding tasks in the Schedule."}
+            confirmLabel={lang === "es" ? "Eliminar" : "Delete"}
+            cancelLabel={lang === "es" ? "Cancelar" : "Cancel"}
+            onCancel={() => setDeleteConfirm(null)}
+            onConfirm={() => handleDeleteSection(deleteConfirm!)}
+          />
+        );
+      })()}
 
       {/* ── Delete row confirmation ────────────────────────── */}
       {deleteRowConfirm && (() => {
         const targetRow = rows.find((r) => r.id === deleteRowConfirm);
+        const rowDesc = targetRow?.description ?? targetRow?.code ?? (lang === "es" ? "esta partida" : "this item");
+        const chapterName = targetRow?.section ?? "";
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}>
-            <div className="flex flex-col gap-4 p-6 rounded-2xl" style={{ background: CS.surface, border: `1px solid ${CS.border}`, maxWidth: 380, width: "100%" }}>
-              <div className="flex items-center gap-2">
-                <Trash2 className="h-5 w-5" style={{ color: "#ef4444" }} />
-                <span className="font-syne font-bold text-base" style={{ color: CS.text }}>{lang === "es" ? "Eliminar partida" : "Delete row"}</span>
-              </div>
-              <p className="text-sm font-dm-sans" style={{ color: CS.muted }}>
-                {lang === "es"
-                  ? `¿Eliminar "${targetRow?.description ?? targetRow?.code ?? "esta partida"}"? Esta acción no se puede deshacer.`
-                  : `Delete "${targetRow?.description ?? targetRow?.code ?? "this row"}"? This cannot be undone.`}
-              </p>
-              <div className="flex gap-2 justify-end">
-                <button onClick={() => setDeleteRowConfirm(null)} className="px-4 py-2 rounded-[10px] text-sm font-medium font-dm-sans"
-                  style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
-                  {lang === "es" ? "Cancelar" : "Cancel"}
-                </button>
-                <button onClick={() => confirmDeleteRow(deleteRowConfirm!)} className="px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-                  style={{ background: "#ef4444", color: "#fff", border: "none", cursor: "pointer" }}>
-                  {lang === "es" ? "Eliminar" : "Delete"}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            isOpen={!!deleteRowConfirm}
+            title={lang === "es" ? "¿Eliminar partida?" : "Delete item?"}
+            message={lang === "es"
+              ? `Se eliminará '${rowDesc}' de '${chapterName}' permanentemente.`
+              : `'${rowDesc}' from '${chapterName}' will be permanently deleted.`}
+            confirmLabel={lang === "es" ? "Eliminar" : "Delete"}
+            cancelLabel={lang === "es" ? "Cancelar" : "Cancel"}
+            onCancel={() => setDeleteRowConfirm(null)}
+            onConfirm={() => confirmDeleteRow(deleteRowConfirm!)}
+          />
         );
       })()}
 
