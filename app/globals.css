@@ -130,14 +130,6 @@
     display: none;
   }
 
-  /* ── Workspace shell sidebar offset ──────────────── */
-  @media (max-width: 767px) {
-    .workspace-shell {
-      margin-left: -2rem !important;
-      width: 100vw !important;
-    }
-  }
-
   /* ── Smooth theme transition ────────────────────── */
   .theme-transition,
   .theme-transition *,

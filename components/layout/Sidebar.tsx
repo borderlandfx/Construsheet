@@ -56,15 +56,8 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
   const displayName = fullName || userEmail.split("@")[0] || "User";
   const displayInitial = displayName.charAt(0).toUpperCase();
 
-  const content = (
-    <div
-      className="flex flex-col h-full"
-      style={{
-        width: 220,
-        background: "var(--cs-surface)",
-        borderRight: "0.5px solid var(--cs-border)",
-      }}
-    >
+  const sidebarInner = (
+    <>
       {/* Logo */}
       <Link
         href="/dashboard"
@@ -116,10 +109,7 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
       </div>
 
       {/* Scrollable projects list */}
-      <div
-        className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-0.5 px-2"
-        style={{ maxHeight: "calc(100vh - 300px)" }}
-      >
+      <div className="flex-1 overflow-y-auto scrollbar-none flex flex-col gap-0.5 px-2">
         {projects.map((p) => {
           const isActive = p.id === activeProjectId;
           return (
@@ -245,11 +235,23 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 
   return (
     <>
+      {/* Desktop sidebar — static flex child, not fixed */}
+      <aside
+        className="hidden md:flex flex-col shrink-0 overflow-y-auto h-full"
+        style={{
+          width: 220,
+          background: "var(--cs-surface)",
+          borderRight: "0.5px solid var(--cs-border)",
+        }}
+      >
+        {sidebarInner}
+      </aside>
+
       {/* Mobile hamburger button */}
       <button
         type="button"
@@ -268,11 +270,6 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
         <Menu className="h-4 w-4" />
       </button>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex fixed left-0 top-[56px] bottom-0 z-30">
-        {content}
-      </aside>
-
       {/* Mobile overlay sidebar */}
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
@@ -281,8 +278,15 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
             style={{ background: "rgba(0,0,0,0.5)" }}
             onClick={() => setMobileOpen(false)}
           />
-          <div className="relative" style={{ paddingTop: 0 }}>
-            {content}
+          <aside
+            className="relative flex flex-col h-full overflow-y-auto"
+            style={{
+              width: 220,
+              background: "var(--cs-surface)",
+              borderRight: "0.5px solid var(--cs-border)",
+            }}
+          >
+            {sidebarInner}
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
@@ -291,7 +295,7 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
+          </aside>
         </div>
       )}
     </>

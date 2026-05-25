@@ -31,32 +31,40 @@ export default async function DashboardLayout({
   const locale = (profile?.language ?? "es") as Locale;
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--cs-bg)" }}>
-      <Navbar
-        user={user}
-        projectCount={count ?? 0}
-        locale={locale}
-        fullName={profile?.full_name}
-      />
+    <div className="flex h-screen overflow-hidden" style={{ background: "var(--cs-bg)" }}>
+      {/* Sidebar — static flex child on desktop, overlay on mobile */}
       <Sidebar
         userId={user.id}
         locale={locale}
         fullName={profile?.full_name}
         userEmail={user.email ?? ""}
       />
-      {/* Main content — offset for fixed navbar + sidebar */}
-      <main
-        className="mx-auto md:ml-[220px]"
-        style={{
-          paddingTop: "calc(56px + 2rem)",
-          paddingBottom: "2rem",
-          paddingLeft: "2rem",
-          paddingRight: "2rem",
-          maxWidth: "1100px",
-        }}
-      >
-        {children}
-      </main>
+
+      {/* Right column: navbar + content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <Navbar
+          user={user}
+          projectCount={count ?? 0}
+          locale={locale}
+          fullName={profile?.full_name}
+        />
+
+        {/* Scrollable content area */}
+        <main
+          className="flex-1 overflow-y-auto"
+          style={{ background: "var(--cs-bg)" }}
+        >
+          <div
+            className="mx-auto"
+            style={{
+              padding: "2rem",
+              maxWidth: 1100,
+            }}
+          >
+            {children}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

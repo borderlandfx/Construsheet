@@ -40,13 +40,11 @@ export default function Navbar({ user, projectCount, locale, fullName }: NavbarP
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-50 flex items-center px-4 sm:px-6 gap-3 sm:gap-4"
+      className="flex items-center px-4 sm:px-6 gap-3 sm:gap-4 shrink-0"
       style={{
-        height: "56px",
+        height: 56,
         background: "var(--cs-surface)",
         borderBottom: "1px solid var(--cs-border)",
-        backdropFilter: "blur(12px)",
-        WebkitBackdropFilter: "blur(12px)",
       }}
     >
       {/* Logo */}
