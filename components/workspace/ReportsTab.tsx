@@ -469,7 +469,7 @@ export default function ReportsTab() {
 
     <div className="flex flex-col gap-6">
       {/* ── Top row: 4 Metric Cards ─────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <MetricCard
           icon={DollarSign}
           label={lang === "es" ? "Total Presupuesto" : "Total Budget"}
@@ -501,7 +501,7 @@ export default function ReportsTab() {
       </div>
 
       {/* ── Middle row: Bar Chart + Donut Chart ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[55fr_45fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[55fr_45fr] gap-4 md:gap-6">
         {/* Bar chart: Budget by Chapter */}
         <ChartCard title={lang === "es" ? "Presupuesto por Capítulo" : "Budget by Chapter"}>
           <div style={{ height: 280 }}>

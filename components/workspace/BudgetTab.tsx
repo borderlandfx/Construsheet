@@ -1367,7 +1367,7 @@ function SortableBudgetRow({
       onClick={onSelect}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, row.id); }}>
       {/* Drag handle */}
-      <td style={{ padding: "7px 4px", textAlign: "center", width: 28 }}>
+      <td style={{ padding: "7px 4px", textAlign: "center", width: 28 }} className="hidden md:table-cell">
         <button
           {...attributes}
           {...listeners}
@@ -1383,10 +1383,10 @@ function SortableBudgetRow({
           <GripVertical className="h-3.5 w-3.5" />
         </button>
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "center", fontSize: "0.7rem", color: "var(--cs-muted)" }}>
+      <td style={{ padding: "7px 10px", textAlign: "center", fontSize: "0.7rem", color: "var(--cs-muted)" }} className="hidden md:table-cell">
         {globalRowNum}
       </td>
-      <td style={{ padding: "7px 10px" }}>
+      <td style={{ padding: "7px 10px" }} className="hidden md:table-cell">
         <InlineCell field="code" rawValue={row.code ?? ""}
           displayValue={<code className="text-xs font-mono" style={{ color: "var(--cs-accent)" }}>{row.code ?? "—"}</code>}
           onSave={(v) => onCellSave(row.id, "code", v)} />
@@ -1401,17 +1401,17 @@ function SortableBudgetRow({
           </>}
           onSave={(v) => onCellSave(row.id, "description", v)} />
       </td>
-      <td style={{ padding: "7px 10px", color: "var(--cs-muted)", fontSize: "0.8125rem" }}>
+      <td style={{ padding: "7px 10px", color: "var(--cs-muted)", fontSize: "0.8125rem" }} className="hidden md:table-cell">
         <InlineCell field="unit" rawValue={row.unit ?? ""}
           displayValue={<span>{row.unit ?? "—"}</span>}
           onSave={(v) => onCellSave(row.id, "unit", v)} />
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "right" }}>
+      <td style={{ padding: "7px 10px", textAlign: "right" }} className="hidden md:table-cell">
         <InlineCell field="quantity" rawValue={String(row.quantity)}
           displayValue={<span style={{ fontSize: "0.8125rem", color: "var(--cs-text)" }}>{row.quantity.toLocaleString()}</span>}
           onSave={(v) => onCellSave(row.id, "quantity", v)} />
       </td>
-      <td style={{ padding: "7px 10px", textAlign: "right" }}>
+      <td style={{ padding: "7px 10px", textAlign: "right" }} className="hidden md:table-cell">
         <InlineCell field="unit_price" rawValue={String(row.unit_price)}
           displayValue={<span style={{ fontSize: "0.8125rem", color: "var(--cs-text)" }}>{fmt(row.unit_price)}</span>}
           onSave={(v) => onCellSave(row.id, "unit_price", v)} />
@@ -1424,12 +1424,12 @@ function SortableBudgetRow({
           displayValue={<StatusPill status={row.status as StatusKey} language={lang} />}
           onSave={(v) => onCellSave(row.id, "status", v)} />
       </td>
-      <td style={{ padding: "7px 10px" }}>
+      <td style={{ padding: "7px 10px" }} className="hidden md:table-cell">
         <InlineCell field="assignee" rawValue={row.assignee ?? ""}
           displayValue={<span className="flex items-center gap-1.5"><AssigneeAvatar name={row.assignee} />{row.assignee && <span style={{ fontSize: "0.75rem", color: "var(--cs-muted)" }}>{row.assignee.split(/\s+/)[0]}</span>}</span>}
           onSave={(v) => onCellSave(row.id, "assignee", v)} />
       </td>
-      <td style={{ padding: "7px 8px" }}>
+      <td style={{ padding: "7px 8px" }} className="hidden md:table-cell">
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(row); }}
             title={lang === "es" ? "Duplicar fila" : "Duplicate row"}
@@ -2352,20 +2352,20 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="rounded-[10px] overflow-hidden" style={{ border: `1px solid ${CS.border}` }}>
           <div className="overflow-x-auto">
-            <table className="w-full font-dm-sans" style={{ minWidth: 760 }}>
+            <table className="w-full font-dm-sans" style={{ minWidth: "auto" }}>
               <thead>
                 <tr>
-                  <th style={{ ...thStyle, width: 28 }} />
-                  <th style={{ ...thStyle, width: 36, textAlign: "center" }}>#</th>
-                  <th style={{ ...thStyle, width: 70 }}>{lang === "es" ? "Código" : "Code"}</th>
+                  <th style={{ ...thStyle, width: 28 }} className="hidden md:table-cell" />
+                  <th style={{ ...thStyle, width: 36, textAlign: "center" }} className="hidden md:table-cell">#</th>
+                  <th style={{ ...thStyle, width: 70 }} className="hidden md:table-cell">{lang === "es" ? "Código" : "Code"}</th>
                   <th style={thStyle}>{lang === "es" ? "Descripción" : "Description"}</th>
-                  <th style={{ ...thStyle, width: 60 }}>{lang === "es" ? "Unidad" : "Unit"}</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 80 }}>{lang === "es" ? "Cantidad" : "Qty"}</th>
-                  <th style={{ ...thStyle, textAlign: "right", width: 110 }}>{lang === "es" ? "P.U." : "Unit Price"}</th>
+                  <th style={{ ...thStyle, width: 60 }} className="hidden md:table-cell">{lang === "es" ? "Unidad" : "Unit"}</th>
+                  <th style={{ ...thStyle, textAlign: "right", width: 80 }} className="hidden md:table-cell">{lang === "es" ? "Cantidad" : "Qty"}</th>
+                  <th style={{ ...thStyle, textAlign: "right", width: 110 }} className="hidden md:table-cell">{lang === "es" ? "P.U." : "Unit Price"}</th>
                   <th style={{ ...thStyle, textAlign: "right", width: 110 }}>Total</th>
                   <th style={{ ...thStyle, width: 100 }}>{lang === "es" ? "Estatus" : "Status"}</th>
-                  <th style={{ ...thStyle, width: 130 }}>{lang === "es" ? "Responsable" : "Assignee"}</th>
-                  <th style={{ ...thStyle, width: 40 }} />
+                  <th style={{ ...thStyle, width: 130 }} className="hidden md:table-cell">{lang === "es" ? "Responsable" : "Assignee"}</th>
+                  <th style={{ ...thStyle, width: 40 }} className="hidden md:table-cell" />
                 </tr>
               </thead>
               <SortableContext items={sections.map((s) => `chapter:${s}`)} strategy={verticalListSortingStrategy}>

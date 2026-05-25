@@ -1076,7 +1076,7 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
       onClick={() => { onSelect(); }}
       onDoubleClick={() => onEdit()}
     >
-      <td className="px-3 py-3" style={{ width: 28 }}>
+      <td className="px-3 py-3 hidden md:table-cell" style={{ width: 28 }}>
         <input
           type="checkbox"
           checked={selected}
@@ -1085,16 +1085,17 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
           style={{ cursor: "pointer", accentColor: CS.accent }}
         />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 hidden md:table-cell">
         <code className="text-xs font-mono" style={{ color: CS.accent }}>{item.code}</code>
       </td>
-      <td className="px-3 py-3 max-w-xs">
-        <span className="text-sm font-dm-sans truncate block" style={{ color: CS.text }}>{item.description}</span>
-      </td>
       <td className="px-3 py-3">
+        <span className="text-sm font-dm-sans truncate block" style={{ color: CS.text }}>{item.description}</span>
+        <span className="text-xs font-dm-sans md:hidden" style={{ color: CS.muted }}>{item.code} · {item.unit}</span>
+      </td>
+      <td className="px-3 py-3 hidden md:table-cell">
         <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>{item.unit}</span>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 hidden md:table-cell">
         {item.category && (() => {
           const col = categoryColor(item.category);
           return (
@@ -1105,13 +1106,13 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
           );
         })()}
       </td>
-      <td className="px-3 py-3 text-right">
+      <td className="px-3 py-3 text-right hidden md:table-cell">
         <span className="text-sm font-dm-sans" style={{ color: CS.text }}>{fmt(item.direct_cost)}</span>
       </td>
       <td className="px-4 py-3 text-right">
         <span className="text-sm font-semibold font-dm-sans" style={{ color: CS.accent }}>{fmt(item.selling_price)}</span>
       </td>
-      <td className="px-3 py-3">
+      <td className="px-3 py-3 hidden md:table-cell">
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button type="button" onClick={(e) => { e.stopPropagation(); onEdit(); }}
             title={_language === "es" ? "Editar" : "Edit"}
@@ -1532,16 +1533,17 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
               <thead>
                 <tr className="text-xs font-semibold"
                   style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.03)", color: CS.muted }}>
-                  <th className="px-3 py-3 w-8" />
+                  <th className="px-3 py-3 w-8 hidden md:table-cell" />
                   {(["code", "description", "unit"] as const).map((col) => {
                     const label = col === "code" ? (lang === "es" ? "Código" : "Code")
                       : col === "description" ? (lang === "es" ? "Descripción" : "Description")
                       : (lang === "es" ? "Unidad" : "Unit");
                     const active = sortBy === col;
+                    const hideMobile = col === "code" || col === "unit";
                     return (
                       <th key={col}
                         onClick={() => toggleSort(col)}
-                        className="text-left px-3 py-3 select-none"
+                        className={`text-left px-3 py-3 select-none ${hideMobile ? "hidden md:table-cell" : ""}`}
                         style={{
                           cursor: "pointer",
                           color: active ? CS.accent : CS.muted,
@@ -1554,7 +1556,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
                       </th>
                     );
                   })}
-                  <th className="text-left px-3 py-3 select-none" style={{ color: CS.muted, width: 140 }}>
+                  <th className="text-left px-3 py-3 select-none hidden md:table-cell" style={{ color: CS.muted, width: 140 }}>
                     {t("category", lang)}
                   </th>
                   {(["direct_cost", "selling_price"] as const).map((col) => {
@@ -1564,7 +1566,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
                     return (
                       <th key={col}
                         onClick={() => toggleSort(col)}
-                        className="text-right px-3 py-3 select-none"
+                        className={`text-right px-3 py-3 select-none ${col === "direct_cost" ? "hidden md:table-cell" : ""}`}
                         style={{
                           cursor: "pointer",
                           color: active ? CS.accent : CS.muted,
@@ -1577,7 +1579,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
                       </th>
                     );
                   })}
-                  <th className="px-3 py-3 w-20" />
+                  <th className="px-3 py-3 w-20 hidden md:table-cell" />
                 </tr>
               </thead>
               <tbody>

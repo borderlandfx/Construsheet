@@ -41,7 +41,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-end md:items-center justify-center"
       style={{
         background: "rgba(0,0,0,0.5)",
         animation: "confirm-fade-in 150ms ease-out",
@@ -50,16 +50,20 @@ export default function ConfirmDialog({
     >
       <style>{`@keyframes confirm-fade-in { from { opacity: 0 } to { opacity: 1 } }`}</style>
       <div
-        className="flex flex-col gap-4 rounded-xl shadow-2xl"
+        className="flex flex-col gap-4 shadow-2xl w-full md:rounded-xl"
         style={{
           background: "var(--cs-surface)",
           border: "1px solid var(--cs-border)",
           maxWidth: 420,
-          width: "100%",
           padding: 24,
+          borderRadius: "16px 16px 0 0",
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile drag handle */}
+        <div className="flex justify-center md:hidden" style={{ marginTop: -8, marginBottom: -8 }}>
+          <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--cs-muted)", opacity: 0.4 }} />
+        </div>
         <div className="flex items-center gap-3">
           <Trash2 className="h-5 w-5 shrink-0" style={{ color: "#ef4444" }} />
           <h3
@@ -100,6 +104,7 @@ export default function ConfirmDialog({
               background: "transparent",
               color: "var(--cs-muted)",
               cursor: "pointer",
+              minHeight: 44,
             }}
           >
             {cancelLabel}
@@ -113,6 +118,7 @@ export default function ConfirmDialog({
               color: "#fff",
               border: "none",
               cursor: "pointer",
+              minHeight: 44,
             }}
           >
             {confirmLabel}

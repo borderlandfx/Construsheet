@@ -220,9 +220,9 @@ function WorkspaceInner({
     >
       {/* ── Top bar ─────────────────────────────────── */}
       <div
-        className="flex items-center gap-3 px-5 shrink-0 flex-wrap"
+        className="flex items-center gap-2 md:gap-3 px-3 md:px-5 shrink-0"
         style={{
-          height: 60,
+          minHeight: 44,
           borderBottom: "1px solid var(--cs-border)",
           background: "var(--cs-surface)",
         }}
@@ -245,28 +245,31 @@ function WorkspaceInner({
         </Link>
 
         {/* Divider */}
-        <div className="h-5 w-px shrink-0" style={{ background: "var(--cs-border)" }} />
+        <div className="h-5 w-px shrink-0 hidden md:block" style={{ background: "var(--cs-border)" }} />
 
         {/* Project name + status */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <ProjectNameEditor initialName={project.name} projectId={projectId} />
           <StatusChanger projectId={projectId} status={project.status} language={language} />
           {project.location && (
-            <span className="text-xs font-dm-sans hidden sm:block" style={{ color: "var(--cs-muted)" }}>
+            <span className="text-xs font-dm-sans hidden md:block" style={{ color: "var(--cs-muted)" }}>
               · {project.location}
             </span>
           )}
         </div>
 
         {/* Push controls to the right */}
-        <div className="flex-1" />
+        <div className="flex-1 hidden md:block" />
 
         {/* Indirect costs settings button */}
         <button
           type="button"
           onClick={() => setShowCosts(true)}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium font-dm-sans transition-colors shrink-0"
+          className="flex items-center justify-center md:gap-1.5 rounded-lg md:px-3 py-1.5 text-xs font-medium font-dm-sans transition-colors shrink-0"
           style={{
+            width: undefined,
+            minWidth: 32,
+            minHeight: 32,
             border: "1px solid var(--cs-border)",
             background: "transparent",
             color: "var(--cs-muted)",
@@ -282,7 +285,7 @@ function WorkspaceInner({
           }}
         >
           <Settings2 className="h-3.5 w-3.5" />
-          {isEs ? "Costos" : "Costs"}
+          <span className="hidden md:inline">{isEs ? "Costos" : "Costs"}</span>
         </button>
 
         {/* Control bar */}
@@ -307,7 +310,7 @@ function WorkspaceInner({
         className="flex-1 overflow-y-auto"
         style={{ background: "var(--cs-bg)" }}
       >
-        <div style={{ padding: "1.5rem", maxWidth: 1100, margin: "0 auto" }}>
+        <div className="px-3 py-4 md:px-6 md:py-6" style={{ maxWidth: 1100, margin: "0 auto" }}>
           {activeTab === "apu"     && <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />}
           {activeTab === "budget"  && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
           {activeTab === "gantt"   && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}

@@ -50,7 +50,7 @@ export default function SummaryBar() {
 
   return (
     <div
-      className="flex items-center shrink-0 overflow-x-auto"
+      className="flex items-center shrink-0 overflow-x-auto scrollbar-none px-2 md:px-0"
       style={{
         height: 36,
         background: "var(--cs-bg2, var(--cs-surface))",
@@ -58,7 +58,7 @@ export default function SummaryBar() {
         gap: 0,
       }}
     >
-      {/* Total Budget */}
+      {/* Total Budget — always visible */}
       <Stat
         label={isEs ? "PRESUPUESTO" : "BUDGET"}
         value={loaded ? fmt(stats.total) : null}
@@ -66,39 +66,42 @@ export default function SummaryBar() {
       />
       <Divider />
 
-      {/* Approved */}
+      {/* Approved — always visible */}
       <Stat
         label={isEs ? "APROBADO" : "APPROVED"}
         value={loaded ? fmt(stats.approved) : null}
         valueColor="#22c55e"
       />
-      <Divider />
+      <Divider className="hidden md:block" />
 
-      {/* APU count */}
+      {/* APU count — hidden on mobile */}
       <Stat
         label="APUs"
         value={apuCount !== null ? String(apuCount) : null}
+        className="hidden md:flex"
       />
-      <Divider />
+      <Divider className="hidden md:block" />
 
-      {/* Item count */}
+      {/* Item count — hidden on mobile */}
       <Stat
         label={isEs ? "PARTIDAS" : "ITEMS"}
         value={loaded ? String(stats.itemCount) : null}
+        className="hidden md:flex"
       />
-      <Divider />
+      <Divider className="hidden md:block" />
 
-      {/* Weeks (gantt chapters) */}
+      {/* Weeks — hidden on mobile */}
       <Stat
         label={isEs ? "SEMANAS" : "WEEKS"}
         value={weekCount !== null ? String(weekCount) : null}
+        className="hidden md:flex"
       />
       <Divider />
 
-      {/* Progress bar */}
-      <div className="flex items-center gap-2 shrink-0" style={{ padding: "0 16px" }}>
+      {/* Progress bar — always visible */}
+      <div className="flex items-center gap-2 shrink-0" style={{ padding: "0 12px" }}>
         <span
-          className="font-dm-sans uppercase"
+          className="font-dm-sans uppercase hidden md:inline"
           style={{ fontSize: 10, color: "var(--cs-muted)", letterSpacing: "0.04em" }}
         >
           {isEs ? "% APROBADO" : "% APPROVED"}
@@ -107,7 +110,7 @@ export default function SummaryBar() {
           <div className="flex items-center gap-2">
             <div
               style={{
-                width: 80,
+                width: 60,
                 height: 6,
                 borderRadius: 3,
                 background: "var(--cs-border)",
@@ -132,7 +135,7 @@ export default function SummaryBar() {
             </span>
           </div>
         ) : (
-          <Skeleton width={100} />
+          <Skeleton width={80} />
         )}
       </div>
     </div>
@@ -143,23 +146,25 @@ function Stat({
   label,
   value,
   valueColor,
+  className = "",
 }: {
   label: string;
   value: string | null;
   valueColor?: string;
+  className?: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 shrink-0" style={{ padding: "0 16px" }}>
+    <div className={`items-center gap-1.5 shrink-0 flex ${className}`} style={{ padding: "0 10px" }}>
       <span
         className="font-dm-sans uppercase"
-        style={{ fontSize: 10, color: "var(--cs-muted)", letterSpacing: "0.04em" }}
+        style={{ fontSize: 10, color: "var(--cs-muted)", letterSpacing: "0.04em", whiteSpace: "nowrap" }}
       >
         {label}
       </span>
       {value !== null ? (
         <span
           className="font-dm-sans"
-          style={{ fontSize: 13, fontWeight: 500, color: valueColor ?? "var(--cs-text)" }}
+          style={{ fontSize: 13, fontWeight: 500, color: valueColor ?? "var(--cs-text)", whiteSpace: "nowrap" }}
         >
           {value}
         </span>
@@ -170,10 +175,10 @@ function Stat({
   );
 }
 
-function Divider() {
+function Divider({ className = "" }: { className?: string }) {
   return (
     <div
-      className="shrink-0"
+      className={`shrink-0 ${className}`}
       style={{ width: 0.5, height: 20, background: "var(--cs-border)" }}
     />
   );

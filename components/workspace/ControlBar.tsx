@@ -83,12 +83,12 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
 
   return (
     <>
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5 md:gap-2">
         {/* Currency select */}
         <select
           value={currency}
           onChange={(e) => setCurrency(e.target.value as Currency)}
-          className="text-xs font-semibold font-dm-sans rounded-lg px-2 py-1"
+          className="hidden md:block text-xs font-semibold font-dm-sans rounded-lg px-2 py-1"
           style={{
             border: "1px solid var(--cs-border)",
             background: "rgba(255,255,255,0.03)",
@@ -104,14 +104,16 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
         </select>
 
         {/* Unit system toggle */}
-        <PillToggle<"m" | "ft">
-          options={[
-            { value: "m", label: "m" },
-            { value: "ft", label: "ft" },
-          ]}
-          value={unitSys}
-          onChange={setUnitSys}
-        />
+        <div className="hidden md:block">
+          <PillToggle<"m" | "ft">
+            options={[
+              { value: "m", label: "m" },
+              { value: "ft", label: "ft" },
+            ]}
+            value={unitSys}
+            onChange={setUnitSys}
+          />
+        </div>
 
         {/* Language toggle */}
         <PillToggle<Locale>
@@ -125,7 +127,7 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
 
         {/* Divider */}
         <div
-          className="hidden sm:block self-stretch"
+          className="hidden md:block self-stretch"
           style={{ width: 1, background: "var(--cs-border)", margin: "0 4px" }}
         />
 
@@ -134,10 +136,10 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
           <Avatar letter={userInitial} color={AVATAR_COLORS[0]} />
         </div>
 
-        {/* Invite button */}
+        {/* Invite button — hidden on mobile */}
         <button
           onClick={() => setInviteOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold font-dm-sans transition-colors"
+          className="hidden md:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold font-dm-sans transition-colors"
           style={{
             border: "1px solid var(--cs-border)",
             background: "transparent",
@@ -161,7 +163,7 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
       {/* Invite modal */}
       {inviteOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center md:p-4"
           style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
           onClick={(e) => e.target === e.currentTarget && setInviteOpen(false)}
         >
@@ -169,13 +171,18 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
             className="w-full flex flex-col gap-5"
             style={{
               maxWidth: 400,
+              maxHeight: "90vh",
               background: "var(--cs-surface)",
               border: "1px solid var(--cs-border)",
-              borderRadius: 16,
+              borderRadius: "16px 16px 0 0",
               padding: "1.5rem",
               boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
             }}
           >
+            {/* Mobile drag handle */}
+            <div className="flex justify-center md:hidden" style={{ marginTop: -8, marginBottom: -8 }}>
+              <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--cs-muted)", opacity: 0.4 }} />
+            </div>
             <div className="flex items-center justify-between">
               <h3 className="font-syne font-bold text-base" style={{ color: "var(--cs-text)" }}>
                 {language === "es" ? "Invitar colaborador" : "Invite collaborator"}

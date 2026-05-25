@@ -1013,10 +1013,77 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         </div>
       )}
 
-      {/* ── Gantt chart ────────────────────────────────────── */}
+      {/* ── Mobile list view ─────────────────────────────── */}
+      {tasks.length > 0 && (
+        <div className="flex flex-col gap-2 md:hidden">
+          {chapterTasks.map((chapter) => {
+            const children = tasks
+              .filter((t) => t.parent_task_id === chapter.id)
+              .sort((a, b) => a.sort_order - b.sort_order);
+            return (
+              <div key={chapter.id}>
+                <div
+                  className="rounded-lg px-3 py-2 font-syne font-bold text-xs uppercase tracking-wider"
+                  style={{ background: "rgba(249,115,22,0.07)", color: CS.accent, borderLeft: `3px solid ${CS.accent}` }}
+                >
+                  {chapter.name}
+                </div>
+                {children.map((task) => {
+                  const cfg = STATUS_CFG[task.status as keyof typeof STATUS_CFG] ?? STATUS_CFG.pending;
+                  return (
+                    <div
+                      key={task.id}
+                      className="flex items-center justify-between px-3 py-2.5"
+                      style={{ borderBottom: `1px solid ${CS.border}`, minHeight: 44 }}
+                    >
+                      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                        <span className="text-sm font-dm-sans truncate" style={{ color: CS.text }}>{task.name}</span>
+                        <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
+                          {lang === "es" ? "S" : "W"}{task.start_week}–{task.start_week + task.duration_weeks - 1}
+                        </span>
+                      </div>
+                      <span
+                        className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold font-dm-sans shrink-0 ml-2"
+                        style={{ background: `${cfg.color}20`, color: cfg.color }}
+                      >
+                        {cfg.label[lang]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {orphanTasks.map((task) => {
+            const cfg = STATUS_CFG[task.status as keyof typeof STATUS_CFG] ?? STATUS_CFG.pending;
+            return (
+              <div
+                key={task.id}
+                className="flex items-center justify-between px-3 py-2.5"
+                style={{ borderBottom: `1px solid ${CS.border}`, minHeight: 44 }}
+              >
+                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                  <span className="text-sm font-dm-sans truncate" style={{ color: CS.text }}>{task.name}</span>
+                  <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
+                    {lang === "es" ? "S" : "W"}{task.start_week}–{task.start_week + task.duration_weeks - 1}
+                  </span>
+                </div>
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold font-dm-sans shrink-0 ml-2"
+                  style={{ background: `${cfg.color}20`, color: cfg.color }}
+                >
+                  {cfg.label[lang]}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Gantt chart (desktop) ─────────────────────────── */}
       {tasks.length > 0 && (
         <div
-          className="rounded-[10px] overflow-hidden overflow-x-auto"
+          className="rounded-[10px] overflow-hidden overflow-x-auto hidden md:block"
           style={{ border: "1px solid var(--color-border-tertiary)", background: "var(--color-background-tertiary)" }}
         >
           {/* Column headers */}
@@ -1169,7 +1236,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
 
       {/* ── Legend + hint ──────────────────────────────────── */}
       {tasks.length > 0 && (
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="hidden md:flex items-center gap-4 flex-wrap">
           {Object.entries(STATUS_CFG).map(([key, cfg]) => (
             <div key={key} className="flex items-center gap-1.5">
               <span

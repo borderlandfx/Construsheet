@@ -10,7 +10,7 @@ export function ContextualToolbar() {
   return (
     <div
       id={TOOLBAR_PORTAL_ID}
-      className="flex items-center gap-2 px-5 shrink-0"
+      className="flex items-center gap-2 px-3 md:px-5 shrink-0 overflow-x-auto scrollbar-none"
       style={{
         height: 42,
         background: "var(--color-background-secondary)",
@@ -42,6 +42,7 @@ export function ToolbarGroup({ label, children }: { label: string; children: Rea
   return (
     <div className="flex items-center gap-1.5">
       <span
+        className="hidden md:inline"
         style={{
           fontSize: 10,
           textTransform: "uppercase",
