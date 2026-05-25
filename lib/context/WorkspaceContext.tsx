@@ -69,12 +69,12 @@ export function WorkspaceProvider({
   const [projectSettings, setProjectSettingsState] = useState<ProjectIndirectCosts>(
     initialSettings ?? DEFAULT_INDIRECT_COSTS
   );
-  const [activeTab, setActiveTabState] = useState<TabId>(initialTab ?? "apu");
+  const [activeTab, setActiveTabState] = useState<TabId>(initialTab ?? "budget");
 
   // Restore saved tab from localStorage after hydration to avoid SSR mismatch
   React.useEffect(() => {
     const saved = localStorage.getItem(`cs-active-tab-${projectId}`);
-    if (saved && (["apu", "budget", "gantt", "takeoff", "reports"] as string[]).includes(saved)) {
+    if (saved && (["apu", "budget", "gantt", "takeoff", "reports", "costs"] as string[]).includes(saved)) {
       setActiveTabState(saved as TabId);
     }
   }, [projectId]);

@@ -15,6 +15,7 @@ import BudgetTab from "@/components/workspace/BudgetTab";
 import GanttTab from "@/components/workspace/GanttTab";
 import TakeoffTab from "@/components/workspace/TakeoffTab";
 import ReportsTab from "@/components/workspace/ReportsTab";
+import IndirectCostsTab from "@/components/workspace/IndirectCostsTab";
 import SummaryBar from "@/components/workspace/SummaryBar";
 import IndirectCostsPanel from "@/components/workspace/IndirectCostsPanel";
 import type { Project, ApuItem, BudgetRow, GanttTask, TakeoffItem, ProjectIndirectCosts } from "@/lib/types/database.types";
@@ -198,11 +199,12 @@ function WorkspaceInner({
   const userInitial = userEmail.charAt(0);
 
   const tabKeys = useMemo(() => ({
-    "1": () => setActiveTab("apu"),
-    "2": () => setActiveTab("budget"),
-    "3": () => setActiveTab("gantt"),
-    "4": () => setActiveTab("takeoff"),
+    "1": () => setActiveTab("budget"),
+    "2": () => setActiveTab("gantt"),
+    "3": () => setActiveTab("takeoff"),
+    "4": () => setActiveTab("apu"),
     "5": () => setActiveTab("reports"),
+    "6": () => setActiveTab("costs"),
     "?": () => setShowShortcuts(true),
     "Escape": () => { setShowCosts(false); setShowShortcuts(false); },
   }), [setActiveTab]);
@@ -322,6 +324,7 @@ function WorkspaceInner({
           {activeTab === "gantt"   && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
           {activeTab === "takeoff" && <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />}
           {activeTab === "reports" && <ReportsTab />}
+          {activeTab === "costs"   && <IndirectCostsTab />}
         </div>
       </div>
 

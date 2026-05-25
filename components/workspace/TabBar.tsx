@@ -1,9 +1,9 @@
 "use client";
 
-import { Table2, BarChart3, GanttChartSquare, Ruler, BarChart2 } from "lucide-react";
+import { Table2, BarChart3, GanttChartSquare, Ruler, BarChart2, Calculator } from "lucide-react";
 import { useWorkspace } from "@/lib/context/WorkspaceContext";
 
-export type TabId = "apu" | "budget" | "gantt" | "takeoff" | "reports";
+export type TabId = "budget" | "gantt" | "takeoff" | "apu" | "reports" | "costs";
 
 interface TabBarProps {
   activeTab: TabId;
@@ -12,11 +12,12 @@ interface TabBarProps {
 }
 
 const TABS: { id: TabId; icon: React.ElementType; label: { es: string; en: string } }[] = [
-  { id: "apu",     icon: Table2,           label: { es: "APU",          en: "APU"      } },
-  { id: "budget",  icon: BarChart3,        label: { es: "Presupuesto",  en: "Budget"   } },
-  { id: "gantt",   icon: GanttChartSquare, label: { es: "Cronograma",   en: "Schedule" } },
-  { id: "takeoff", icon: Ruler,            label: { es: "Generadores",  en: "Takeoff"  } },
-  { id: "reports", icon: BarChart2,        label: { es: "Reportes",     en: "Reports"  } },
+  { id: "budget",  icon: BarChart3,        label: { es: "Presupuesto",       en: "Budget"         } },
+  { id: "gantt",   icon: GanttChartSquare, label: { es: "Cronograma",        en: "Schedule"       } },
+  { id: "takeoff", icon: Ruler,            label: { es: "Generadores",       en: "Takeoff"        } },
+  { id: "apu",     icon: Table2,           label: { es: "APU",               en: "APU"            } },
+  { id: "reports", icon: BarChart2,        label: { es: "Reportes",          en: "Reports"        } },
+  { id: "costs",   icon: Calculator,       label: { es: "Costos Indirectos", en: "Indirect Costs" } },
 ];
 
 export default function TabBar({ activeTab, onTabChange, counts }: TabBarProps) {

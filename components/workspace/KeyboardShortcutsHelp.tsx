@@ -40,7 +40,7 @@ export default function KeyboardShortcutsHelp({ isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   const nav = [
-    { key: "1–5", desc: isEs ? "Cambiar pestaña" : "Switch tab" },
+    { key: "1–6", desc: isEs ? "Cambiar pestaña" : "Switch tab" },
     { key: "/", desc: isEs ? "Buscar" : "Search" },
     { key: "Esc", desc: isEs ? "Cerrar / Cancelar" : "Close / Cancel" },
   ];
