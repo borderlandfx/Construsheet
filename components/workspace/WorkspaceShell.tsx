@@ -220,16 +220,9 @@ function WorkspaceInner({
   }, []);
 
   return (
-    // Fill the available content area from the layout
     <div
-      style={{
-        margin: "-2rem",
-        height: "calc(100vh - 56px)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--cs-bg)",
-      }}
+      className="flex flex-col flex-1 min-w-0 overflow-hidden"
+      style={{ background: "var(--cs-bg)" }}
     >
       {/* ── Top bar ─────────────────────────────────── */}
       <div

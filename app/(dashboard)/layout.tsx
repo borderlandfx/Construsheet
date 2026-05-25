@@ -49,20 +49,12 @@ export default async function DashboardLayout({
           fullName={profile?.full_name}
         />
 
-        {/* Scrollable content area */}
+        {/* Content area — each page handles its own scrolling and padding */}
         <main
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-hidden flex flex-col min-w-0"
           style={{ background: "var(--cs-bg)" }}
         >
-          <div
-            className="mx-auto"
-            style={{
-              padding: "2rem",
-              maxWidth: 1100,
-            }}
-          >
-            {children}
-          </div>
+          {children}
         </main>
       </div>
     </div>

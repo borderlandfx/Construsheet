@@ -19,5 +19,11 @@ export default async function DashboardPage() {
 
   const locale = (profile?.language ?? "es") as Locale;
 
-  return <ProjectsDashboard userId={user.id} locale={locale} />;
+  return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto" style={{ padding: "2rem", maxWidth: 1100 }}>
+        <ProjectsDashboard userId={user.id} locale={locale} />
+      </div>
+    </div>
+  );
 }

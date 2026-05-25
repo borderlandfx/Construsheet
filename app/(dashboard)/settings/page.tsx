@@ -19,13 +19,17 @@ export default async function SettingsPage() {
     .single();
 
   return (
-    <SettingsForm
-      userId={user.id}
-      email={user.email ?? ""}
-      initialFullName={profile?.full_name ?? ""}
-      initialLanguage={(profile?.language ?? "es") as Locale}
-      initialCurrency={(profile?.currency_pref ?? "USD") as Currency}
-      initialDefaultCosts={profile?.default_indirect_costs ?? null}
-    />
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto" style={{ padding: "2rem", maxWidth: 1100 }}>
+        <SettingsForm
+          userId={user.id}
+          email={user.email ?? ""}
+          initialFullName={profile?.full_name ?? ""}
+          initialLanguage={(profile?.language ?? "es") as Locale}
+          initialCurrency={(profile?.currency_pref ?? "USD") as Currency}
+          initialDefaultCosts={profile?.default_indirect_costs ?? null}
+        />
+      </div>
+    </div>
   );
 }
