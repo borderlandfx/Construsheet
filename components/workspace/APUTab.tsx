@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   Plus, Trash2, Pencil, Loader2, X,
   Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText, Download, Sparkles,
-  FileSpreadsheet, Info,
+  FileSpreadsheet, Info, ChevronRight, ChevronDown,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -1182,36 +1182,59 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
     onToggleLibrary: (item: ApuItem) => void }
 ) {
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [sortBy, setSortBy] = useState<"code" | "description" | "unit" | "direct_cost" | "selling_price" | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const lang = language;
 
-  function toggleSort(col: "code" | "description" | "unit" | "direct_cost" | "selling_price") {
-    if (sortBy === col) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    else { setSortBy(col); setSortDir("asc"); }
+  const GROUP_COLORS = ["#22c55e","#3b82f6","#8b5cf6","#f59e0b","#f97316","#14b8a6","#ef4444","#ec4899"];
+
+  function toggleCollapse(cat: string) {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat); else next.add(cat);
+      return next;
+    });
   }
 
   // Unique categories present in current items
   const usedCategories = Array.from(new Set(items.map((i) => i.category).filter(Boolean) as string[])).sort();
 
   // Apply category filter
-  const categoryFiltered = categoryFilter
-    ? items.filter((i) => i.category === categoryFilter)
-    : items;
+  const filtered = categoryFilter ? items.filter((i) => i.category === categoryFilter) : items;
 
-  const sortedItems = sortBy
-    ? [...categoryFiltered].sort((a, b) => {
-        const va = a[sortBy], vb = b[sortBy];
-        const cmp = typeof va === "number" && typeof vb === "number"
-          ? va - vb
-          : String(va).localeCompare(String(vb));
-        return sortDir === "asc" ? cmp : -cmp;
-      })
-    : items;
+  // Group by category — maintain CHAPTER_CATEGORIES order, uncategorized last
+  const groups = useMemo(() => {
+    const map = new Map<string, ApuItem[]>();
+    for (const item of filtered) {
+      const cat = item.category || "__none__";
+      if (!map.has(cat)) map.set(cat, []);
+      map.get(cat)!.push(item);
+    }
+    // Sort by CHAPTER_CATEGORIES order
+    const ordered: { cat: string; label: string; items: ApuItem[]; color: string }[] = [];
+    CHAPTER_CATEGORIES.forEach((c, i) => {
+      const arr = map.get(c.es);
+      if (arr && arr.length > 0) {
+        ordered.push({ cat: c.es, label: lang === "es" ? c.es : c.en, items: arr, color: GROUP_COLORS[i % GROUP_COLORS.length] });
+        map.delete(c.es);
+      }
+    });
+    // Any remaining categories not in CHAPTER_CATEGORIES
+    map.forEach((arr, cat) => {
+      if (cat !== "__none__" && arr.length > 0) {
+        ordered.push({ cat, label: getCategoryLabel(cat, lang), items: arr, color: GROUP_COLORS[ordered.length % GROUP_COLORS.length] });
+      }
+    });
+    // Uncategorized last
+    const uncatArr = map.get("__none__");
+    if (uncatArr && uncatArr.length > 0) {
+      ordered.push({ cat: "__none__", label: lang === "es" ? "Sin categoría" : "Uncategorized", items: uncatArr, color: "var(--cs-muted)" });
+    }
+    return ordered;
+  }, [filtered, lang]);
 
-  const totalSelling = categoryFiltered.reduce((s, i) => s + i.selling_price, 0);
-  const selectedItem = categoryFiltered.find((i) => i.id === selectedId) ?? null;
+  const totalSelling = filtered.reduce((s, i) => s + i.selling_price, 0);
+  const selectedItem = filtered.find((i) => i.id === selectedId) ?? null;
 
   async function handleDeleteSelected() {
     if (!selectedId) return;
@@ -1439,49 +1462,52 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
         </TBtnPrimary>
       </ToolbarPortal>
     <div className="flex flex-col h-full">
-      {/* Header */}
+      {/* Header + summary */}
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div>
           <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
             {lang === "es" ? "Análisis de Precio Unitario" : "Unit Price Analysis"}
           </h2>
-          <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
-            {items.length} {lang === "es" ? "análisis registrados" : "analyses on record"}
+          <div className="flex items-center gap-3 mt-1 font-dm-sans flex-wrap" style={{ fontSize: 12, color: CS.muted }}>
+            <span>{filtered.length} {lang === "es" ? "análisis" : "analyses"} · {groups.length} {lang === "es" ? "categorías" : "categories"}</span>
             {totalSelling > 0 && (
-              <>
-                {" · "}
-                <span style={{ color: CS.text, fontWeight: 600 }}>{fmt(totalSelling)}</span>
-                {" "}{lang === "es" ? "precio venta total" : "total selling price"}
-              </>
+              <span style={{ color: CS.text, fontWeight: 600 }}>{fmt(totalSelling)} {lang === "es" ? "total" : "total"}</span>
             )}
-          </p>
-          {usedCategories.length > 0 && (
-            <div className="flex items-center gap-1.5 mt-1.5">
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                style={{
-                  background: "rgba(255,255,255,0.04)", border: `1px solid ${CS.border}`,
-                  borderRadius: 8, color: categoryFilter ? CS.text : CS.muted,
-                  fontFamily: "var(--font-dm-sans)", fontSize: "0.75rem",
-                  padding: "3px 8px", outline: "none", cursor: "pointer",
-                }}
-              >
-                <option value="">{t("allCategories", lang)}</option>
-                {usedCategories.map((c) => (
-                  <option key={c} value={c}>{getCategoryLabel(c, lang)}</option>
+            {groups.length > 0 && (
+              <span className="hidden md:flex items-center gap-1.5">
+                {groups.slice(0, 6).map((g) => (
+                  <span key={g.cat} className="rounded-full" style={{ width: 6, height: 6, background: g.color, display: "inline-block" }} />
                 ))}
-              </select>
-              {categoryFilter && (
-                <button onClick={() => setCategoryFilter("")}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted, display: "flex", alignItems: "center" }}>
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          )}
+              </span>
+            )}
+          </div>
         </div>
-        {/* Buttons moved to ContextualToolbar via portal above */}
+        {/* Category filter */}
+        {usedCategories.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="font-dm-sans"
+              style={{
+                background: "rgba(255,255,255,0.04)", border: `1px solid ${CS.border}`,
+                borderRadius: 8, color: categoryFilter ? CS.text : CS.muted,
+                fontSize: 12, padding: "4px 8px", outline: "none", cursor: "pointer",
+              }}
+            >
+              <option value="">{lang === "es" ? "Todas las categorías" : "All categories"}</option>
+              {usedCategories.map((c) => (
+                <option key={c} value={c}>{getCategoryLabel(c, lang)}</option>
+              ))}
+            </select>
+            {categoryFilter && (
+              <button onClick={() => setCategoryFilter("")}
+                style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted, display: "flex", alignItems: "center" }}>
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Empty state */}
@@ -1505,77 +1531,64 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
         </div>
       )}
 
-      {/* Table */}
+      {/* Grouped table */}
       {items.length > 0 && (
         <div className="rounded-[10px] overflow-hidden flex-1 flex flex-col" style={{ border: `1px solid ${CS.border}` }}>
-          <div className="flex-1 overflow-x-auto">
-            <table className="w-full font-dm-sans">
-              <thead>
-                <tr className="text-xs font-semibold"
-                  style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.03)", color: CS.muted }}>
-                  <th className="px-3 py-3 w-8 hidden md:table-cell" />
-                  {(["code", "description", "unit"] as const).map((col) => {
-                    const label = col === "code" ? (lang === "es" ? "Código" : "Code")
-                      : col === "description" ? (lang === "es" ? "Descripción" : "Description")
-                      : (lang === "es" ? "Unidad" : "Unit");
-                    const active = sortBy === col;
-                    const hideMobile = col === "code" || col === "unit";
-                    return (
-                      <th key={col}
-                        onClick={() => toggleSort(col)}
-                        className={`text-left px-3 py-3 select-none ${hideMobile ? "hidden md:table-cell" : ""}`}
-                        style={{
-                          cursor: "pointer",
-                          color: active ? CS.accent : CS.muted,
-                          width: col === "code" ? 80 : col === "unit" ? 80 : undefined,
-                        }}>
-                        <span className="inline-flex items-center gap-1">
-                          {label}
-                          {active ? (sortDir === "asc" ? "↑" : "↓") : <span style={{ opacity: 0.3 }}>↕</span>}
-                        </span>
-                      </th>
-                    );
-                  })}
-                  <th className="text-left px-3 py-3 select-none hidden md:table-cell" style={{ color: CS.muted, width: 140 }}>
-                    {t("category", lang)}
-                  </th>
-                  {(["direct_cost", "selling_price"] as const).map((col) => {
-                    const label = col === "direct_cost" ? (lang === "es" ? "Costo Directo" : "Direct Cost")
-                      : (lang === "es" ? "Precio Final" : "Final Price");
-                    const active = sortBy === col;
-                    return (
-                      <th key={col}
-                        onClick={() => toggleSort(col)}
-                        className={`text-right px-3 py-3 select-none ${col === "direct_cost" ? "hidden md:table-cell" : ""}`}
-                        style={{
-                          cursor: "pointer",
-                          color: active ? CS.accent : CS.muted,
-                          width: col === "direct_cost" ? 128 : 144,
-                        }}>
-                        <span className="inline-flex items-center gap-1">
-                          {label}
-                          {active ? (sortDir === "asc" ? "↑" : "↓") : <span style={{ opacity: 0.3 }}>↕</span>}
-                        </span>
-                      </th>
-                    );
-                  })}
-                  <th className="px-3 py-3 w-20 hidden md:table-cell" />
-                </tr>
-              </thead>
-              <tbody>
-                {sortedItems.map((item) => (
-                  <APUListRow key={item.id} item={item} language={language} fmt={fmt}
-                    selected={selectedId === item.id}
-                    onSelect={() => onSelect(item.id === selectedId ? "" : item.id)}
-                    onEdit={() => onEdit(item)}
-                    onDelete={() => onDelete(item.id)}
-                    onDuplicate={() => onDuplicate(item)}
-                    onSendToBudget={() => onSendToBudget(item)}
-                    onPrint={() => onPrint(item)}
-                    onToggleLibrary={() => onToggleLibrary(item)} />
-                ))}
-              </tbody>
-            </table>
+          <div className="flex-1 overflow-y-auto">
+            {groups.map((group) => {
+              const collapsed = collapsedCats.has(group.cat);
+              const groupTotal = group.items.reduce((s, i) => s + i.selling_price, 0);
+              const Chev = collapsed ? ChevronRight : ChevronDown;
+              return (
+                <div key={group.cat}>
+                  {/* Category header */}
+                  <div
+                    className="flex items-center justify-between px-3 py-2 cursor-pointer select-none group"
+                    style={{
+                      background: "var(--cs-bg2, rgba(255,255,255,0.03))",
+                      borderBottom: `1px solid ${CS.border}`,
+                      borderLeft: `3px solid ${group.color}`,
+                    }}
+                    onClick={() => toggleCollapse(group.cat)}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Chev className="h-3.5 w-3.5 shrink-0" style={{ color: group.color }} />
+                      <span className="font-syne font-bold text-xs uppercase tracking-wider truncate" style={{ color: group.color }}>
+                        {group.label}
+                      </span>
+                      <span
+                        className="text-[10px] font-dm-sans font-medium rounded-full px-1.5 py-px shrink-0"
+                        style={{ background: `${group.color}18`, color: group.color }}
+                      >
+                        {group.items.length} APU{group.items.length !== 1 ? "s" : ""}
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold font-dm-sans shrink-0" style={{ color: group.color }}>
+                      {fmt(groupTotal)}
+                    </span>
+                  </div>
+
+                  {/* APU rows */}
+                  {!collapsed && (
+                    <table className="w-full font-dm-sans">
+                      <tbody>
+                        {group.items.map((item) => (
+                          <APUListRow key={item.id} item={item} language={language} fmt={fmt}
+                            selected={selectedId === item.id}
+                            onSelect={() => onSelect(item.id === selectedId ? "" : item.id)}
+                            onEdit={() => onEdit(item)}
+                            onDelete={() => onDelete(item.id)}
+                            onDuplicate={() => onDuplicate(item)}
+                            onSendToBudget={() => onSendToBudget(item)}
+                            onPrint={() => onPrint(item)}
+                            onToggleLibrary={() => onToggleLibrary(item)} />
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Footer total */}
