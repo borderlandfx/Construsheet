@@ -2177,16 +2177,24 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
       status:      "pending" as const,
       sort_order:  nextOrder,
     });
-    setSendItem(null);
-    if (!error) {
+    if (error) {
+      console.error("[APU→Budget] Insert error:", error);
       toast(
         language === "es"
-          ? `"${item.description}" agregado al presupuesto`
-          : `"${item.description}" added to budget`,
-        "success"
+          ? `Error al agregar al presupuesto: ${error.message}`
+          : `Failed to add to budget: ${error.message}`,
+        "error"
       );
-      setActiveTab("budget");
+      return;
     }
+    setSendItem(null);
+    toast(
+      language === "es"
+        ? `"${item.description}" agregado al presupuesto`
+        : `"${item.description}" added to budget`,
+      "success"
+    );
+    setActiveTab("budget");
   }
 
   return (

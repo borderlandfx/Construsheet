@@ -2637,7 +2637,8 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
   const [apuItems, setApuItems] = useState<ApuItem[]>([]);
   const [loading, setLoading]   = useState(true);
   const [query, setQuery]       = useState("");
-  const [section, setSection]   = useState(sections[0] ?? "");
+  const { toast } = useToast();
+  const [section, setSection]   = useState(sections.length > 0 ? sections[0] : "__new__");
   const [newSec, setNewSec]     = useState("");
   const [importing, setImporting] = useState<string | null>(null);
 
@@ -2658,7 +2659,10 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
   );
 
   async function handleImport(apu: ApuItem) {
-    if (!effectiveSec) return;
+    if (!effectiveSec) {
+      toast(language === "es" ? "Selecciona o crea una sección primero" : "Select or create a section first", "error");
+      return;
+    }
     setImporting(apu.id);
     const payload: BudgetRowInsert = {
       project_id: projectId, apu_item_id: apu.id, section: effectiveSec,
@@ -2667,7 +2671,12 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
     };
     const { data, error } = await supabase.from("budget_rows").insert(payload).select().single();
     setImporting(null);
-    if (!error && data) { onSaved(data as BudgetRow); onClose(); }
+    if (error) {
+      console.error("[IMPORT APU] Insert error:", error);
+      toast(language === "es" ? `Error al importar: ${error.message}` : `Import failed: ${error.message}`, "error");
+      return;
+    }
+    if (data) { onSaved(data as BudgetRow); onClose(); }
   }
 
   return (
