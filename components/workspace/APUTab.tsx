@@ -3,8 +3,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   Plus, Trash2, Pencil, Loader2, X,
-  Search, ArrowLeft, BookOpen, Copy, ArrowRight, FileText, Download, Sparkles,
-  FileSpreadsheet, Info, ChevronRight, ChevronDown,
+  Search, ArrowLeft, BookOpen, Copy, FileText, Download, Sparkles,
+  FileSpreadsheet, Info, ChevronRight, ChevronDown, Send,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -705,10 +705,11 @@ function DetailedCostSummary({ draft, settings, fmt, language }:
 
 // ─── APUEditor ────────────────────────────────────────────────────────────────
 
-function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId, projectSettings, onSaved, onCancel }:
+function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId, projectSettings, onSaved, onCancel, onSendToBudget }:
   { initialDraft: EditorDraft; language: Locale; currency: string; fmt: (n: number) => string;
     projectId: string; projectSettings: ProjectIndirectCosts;
-    onSaved: (item: ApuItem) => void; onCancel: () => void }
+    onSaved: (item: ApuItem) => void; onCancel: () => void;
+    onSendToBudget?: (item: ApuItem) => void }
 ) {
   const supabase = createClient();
   const { toast } = useToast();
@@ -894,6 +895,28 @@ function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId
           <span style={{ fontSize: 13 }}>✦</span>
           {aiFilled ? (language === "es" ? "Regenerar" : "Regenerate") : (language === "es" ? "Sugerir con IA" : "AI Suggest")}
         </button>
+        {draft.id && onSendToBudget && (
+          <button type="button"
+            onClick={() => {
+              // Build a temporary ApuItem from current draft to send
+              const c = calcCostsDetailed(draft, projectSettings);
+              onSendToBudget({
+                id: draft.id!, project_id: projectId, code: draft.code, description: draft.description,
+                unit: draft.unit, category: draft.category ?? null, materials: draft.materials,
+                labor: draft.labor, equipment: draft.equipment, direct_cost: c.directCost,
+                overhead_pct: projectSettings.ggen.pct + projectSettings.pgas1.pct + projectSettings.pgas2.pct,
+                profit_pct: projectSettings.util.pct, selling_price: c.finalPrice,
+                is_library: false, user_id: null, created_at: "", updated_at: "",
+              });
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold font-dm-sans"
+            style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}
+            onMouseEnter={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = "rgba(249,115,22,0.4)"; b.style.color = CS.accent; }}
+            onMouseLeave={(e) => { const b = e.currentTarget as HTMLButtonElement; b.style.borderColor = CS.border; b.style.color = CS.muted; }}>
+            <Send className="h-3 w-3" />
+            {language === "es" ? "Presupuesto" : "Budget"}
+          </button>
+        )}
         <button type="button" onClick={handleSave} disabled={saving || !isValid}
           className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold font-dm-sans"
           style={{ background: CS.accent, color: "#fff", border: "none", cursor: saving || !isValid ? "not-allowed" : "pointer", opacity: saving || !isValid ? 0.6 : 1 }}>
@@ -1134,12 +1157,12 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
             <FileText className="h-3 w-3" />
           </button>
           <button type="button" onClick={(e) => { e.stopPropagation(); onSendToBudget(); }}
-            title={_language === "es" ? "Agregar al presupuesto" : "Add to budget"}
+            title={_language === "es" ? "Enviar al Presupuesto" : "Send to Budget"}
             className="flex items-center gap-1 px-2 rounded-lg text-xs font-medium font-dm-sans"
             style={{ height: 28, background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.2)", cursor: "pointer", color: CS.accent, whiteSpace: "nowrap" }}
             onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.18)"; }}
             onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.1)"; }}>
-            <ArrowRight className="h-3 w-3" />
+            <Send className="h-3 w-3" />
             {_language === "es" ? "Presupuesto" : "Budget"}
           </button>
           <label className="flex items-center gap-1.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
@@ -1769,20 +1792,25 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
 // ─── Send to Budget Modal ─────────────────────────────────────────────────────
 
 function SendToBudgetModal({
-  item, projectId, language, onConfirm, onClose,
+  item, projectId, language, fmt, onConfirm, onClose,
 }: {
   item: ApuItem;
   projectId: string;
   language: Locale;
-  onConfirm: (item: ApuItem, section: string, qty: number) => Promise<void>;
+  fmt: (n: number) => string;
+  onConfirm: (item: ApuItem, section: string, qty: number, isNewChapter: boolean) => Promise<void>;
   onClose: () => void;
 }) {
   const supabase = createClient();
-  const [section, setSection] = useState("");
+  const [sectionMode, setSectionMode] = useState<"existing" | "new">("existing");
+  const [selectedSection, setSelectedSection] = useState("");
+  const [newSection, setNewSection] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [saving, setSaving] = useState(false);
   const [existingSections, setExistingSections] = useState<string[]>([]);
   const lang = language;
+  const qty = parseFloat(quantity) || 0;
+  const estimatedTotal = qty * item.selling_price;
 
   useEffect(() => {
     async function loadSections() {
@@ -1802,11 +1830,20 @@ function SendToBudgetModal({
         // Pre-fill section from APU category
         if (item.category) {
           const catLabel = getCategoryLabel(item.category, language);
-          // If a chapter with the exact category name exists, use it
           const match = unique.find(
             (s) => s.toUpperCase() === item.category!.toUpperCase() || s.toUpperCase() === catLabel.toUpperCase()
           );
-          setSection(match ?? item.category);
+          if (match) {
+            setSelectedSection(match);
+            setSectionMode("existing");
+          } else {
+            setNewSection(item.category);
+            setSectionMode(unique.length > 0 ? "existing" : "new");
+          }
+        } else if (unique.length > 0) {
+          setSelectedSection(unique[0]);
+        } else {
+          setSectionMode("new");
         }
       }
     }
@@ -1816,11 +1853,21 @@ function SendToBudgetModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [projectId, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const effectiveSection = sectionMode === "new" ? newSection.trim() : selectedSection.trim();
+  const isNewChapter = sectionMode === "new" && !!newSection.trim();
+
   async function handleSubmit() {
+    if (!effectiveSection) return;
     setSaving(true);
-    await onConfirm(item, section || "APU", parseFloat(quantity) || 1);
+    await onConfirm(item, effectiveSection, qty || 1, isNewChapter);
     setSaving(false);
   }
+
+  const fieldStyle: React.CSSProperties = {
+    width: "100%", padding: "0.4rem 0.625rem", borderRadius: 8,
+    border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.04)",
+    color: CS.text, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", outline: "none",
+  };
 
   return (
     <div
@@ -1837,9 +1884,12 @@ function SendToBudgetModal({
         }}
       >
         <div className="flex items-center justify-between">
-          <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
-            {lang === "es" ? "Agregar al Presupuesto" : "Add to Budget"}
-          </span>
+          <div className="flex items-center gap-2">
+            <Send className="h-4 w-4" style={{ color: CS.accent }} />
+            <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
+              {lang === "es" ? "Enviar al Presupuesto" : "Send to Budget"}
+            </span>
+          </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}>
             <X className="h-4 w-4" />
           </button>
@@ -1853,26 +1903,44 @@ function SendToBudgetModal({
           <p className="text-xs font-dm-sans font-medium" style={{ color: CS.accent }}>{item.code}</p>
           <p className="text-sm font-dm-sans mt-0.5 truncate" style={{ color: CS.text }}>{item.description}</p>
           <p className="text-xs font-dm-sans mt-0.5" style={{ color: CS.muted }}>
-            {item.unit} · {lang === "es" ? "P.V." : "S.P."}: <strong style={{ color: CS.accent }}>{item.selling_price.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</strong>
+            {item.unit} · {lang === "es" ? "P.V." : "S.P."}: <strong style={{ color: CS.accent }}>{fmt(item.selling_price)}</strong>
           </p>
         </div>
 
-        {/* Section */}
+        {/* Chapter / Section */}
         <div>
           <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 500, color: CS.muted, fontFamily: "var(--font-dm-sans)", marginBottom: 4 }}>
-            {lang === "es" ? "Capítulo / Sección" : "Chapter / Section"}
+            {lang === "es" ? "Capítulo / Sección" : "Chapter / Section"} *
           </label>
-          <input
-            list="apu-budget-sections"
-            style={{ width: "100%", padding: "0.4rem 0.625rem", borderRadius: 8, border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.04)", color: CS.text, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", outline: "none" }}
-            value={section}
-            onChange={(e) => setSection(e.target.value)}
-            placeholder={lang === "es" ? "Ej. 03 · CONCRETO" : "E.g. 03 · CONCRETE"}
-            autoFocus
-          />
-          <datalist id="apu-budget-sections">
-            {existingSections.map((s) => <option key={s} value={s} />)}
-          </datalist>
+          {sectionMode === "new" ? (
+            <div className="flex gap-2 items-center">
+              <input
+                style={fieldStyle}
+                value={newSection}
+                onChange={(e) => setNewSection(e.target.value)}
+                placeholder={lang === "es" ? "Ej. 03 · CONCRETO" : "E.g. 03 · CONCRETE"}
+                autoFocus
+              />
+              {existingSections.length > 0 && (
+                <button type="button" onClick={() => { setSectionMode("existing"); setSelectedSection(existingSections[0]); }}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: CS.accent, fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap" }}>
+                  {lang === "es" ? "Existente" : "Existing"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <select
+              style={fieldStyle}
+              value={selectedSection}
+              onChange={(e) => {
+                if (e.target.value === "__new__") { setSectionMode("new"); setNewSection(""); }
+                else setSelectedSection(e.target.value);
+              }}
+            >
+              {existingSections.map((s) => <option key={s} value={s}>{s}</option>)}
+              <option value="__new__">{lang === "es" ? "+ Nuevo capítulo..." : "+ New chapter..."}</option>
+            </select>
+          )}
         </div>
 
         {/* Quantity */}
@@ -1884,10 +1952,15 @@ function SendToBudgetModal({
             type="number"
             min={0}
             step="any"
-            style={{ width: "100%", padding: "0.4rem 0.625rem", borderRadius: 8, border: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.04)", color: CS.text, fontSize: "0.8125rem", fontFamily: "var(--font-dm-sans)", outline: "none" }}
+            style={fieldStyle}
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
           />
+          {qty > 0 && (
+            <p className="text-xs font-dm-sans mt-1.5" style={{ color: CS.muted }}>
+              {lang === "es" ? "Total estimado" : "Estimated total"}: <strong style={{ color: CS.accent }}>{fmt(estimatedTotal)}</strong>
+            </p>
+          )}
         </div>
 
         <div className="flex gap-2 justify-end pt-1">
@@ -1896,12 +1969,12 @@ function SendToBudgetModal({
             style={{ border: `1px solid ${CS.border}`, background: "transparent", color: CS.muted, cursor: "pointer" }}>
             {lang === "es" ? "Cancelar" : "Cancel"}
           </button>
-          <button onClick={handleSubmit} disabled={saving}
+          <button onClick={handleSubmit} disabled={saving || !effectiveSection}
             className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-semibold font-dm-sans"
-            style={{ background: CS.accent, color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
+            style={{ background: CS.accent, color: "#fff", border: "none", cursor: saving || !effectiveSection ? "not-allowed" : "pointer", opacity: saving || !effectiveSection ? 0.6 : 1 }}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            <ArrowRight className="h-3.5 w-3.5" />
-            {lang === "es" ? "Agregar" : "Add"}
+            <Send className="h-3.5 w-3.5" />
+            {lang === "es" ? "Enviar" : "Send"}
           </button>
         </div>
       </div>
@@ -2156,7 +2229,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
     setSendItem(item);
   }
 
-  async function handleConfirmSendToBudget(item: ApuItem, section: string, quantity: number) {
+  async function handleConfirmSendToBudget(item: ApuItem, section: string, quantity: number, isNewChapter: boolean) {
     const supabase = createClient();
     const { data: maxRow } = await supabase
       .from("budget_rows")
@@ -2164,7 +2237,35 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
       .eq("project_id", projectId)
       .order("sort_order", { ascending: false })
       .limit(1);
-    const nextOrder = ((maxRow?.[0]?.sort_order ?? 0) as number) + 1;
+    let nextOrder = ((maxRow?.[0]?.sort_order ?? 0) as number) + 1;
+
+    // If new chapter, insert chapter header row first
+    if (isNewChapter) {
+      const { error: chErr } = await supabase.from("budget_rows").insert({
+        project_id:  projectId,
+        section:     section.trim(),
+        code:        "",
+        description: section.trim(),
+        unit:        "",
+        quantity:    0,
+        unit_price:  0,
+        status:      "pending" as const,
+        sort_order:  nextOrder,
+        is_chapter:  true,
+      });
+      if (chErr) {
+        console.error("[APU→Budget] Chapter insert error:", chErr);
+        toast(
+          language === "es"
+            ? `Error al crear capítulo: ${chErr.message}`
+            : `Failed to create chapter: ${chErr.message}`,
+          "error"
+        );
+        return;
+      }
+      nextOrder += 1;
+    }
+
     const { error } = await supabase.from("budget_rows").insert({
       project_id:  projectId,
       apu_item_id: item.id,
@@ -2176,6 +2277,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
       unit_price:  item.selling_price,
       status:      "pending" as const,
       sort_order:  nextOrder,
+      is_chapter:  false,
     });
     if (error) {
       console.error("[APU→Budget] Insert error:", error);
@@ -2192,9 +2294,12 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
       language === "es"
         ? `"${item.description}" agregado al presupuesto`
         : `"${item.description}" added to budget`,
-      "success"
+      "success",
+      {
+        label: language === "es" ? "Ver presupuesto" : "View budget",
+        onClick: () => setActiveTab("budget"),
+      }
     );
-    setActiveTab("budget");
   }
 
   return (
@@ -2248,6 +2353,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
           item={sendItem}
           projectId={projectId}
           language={language}
+          fmt={fmt}
           onConfirm={handleConfirmSendToBudget}
           onClose={() => setSendItem(null)}
         />
@@ -2272,6 +2378,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
               projectSettings={projectSettings}
               onSaved={handleSaved}
               onCancel={() => setView({ kind: "list" })}
+              onSendToBudget={handleSendToBudget}
             />
           </div>
         </div>
