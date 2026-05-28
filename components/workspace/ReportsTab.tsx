@@ -14,6 +14,7 @@ import {
   Printer,
   BarChart3,
   ArrowRight,
+  ClipboardList,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
@@ -37,6 +38,9 @@ import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { useToast } from "@/lib/context/ToastContext";
 import type { BudgetRow } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
+import ExecutiveSummary from "./ExecutiveSummary";
+
+type ReportView = "dashboard" | "executive";
 
 // ─── Status colors ───────────────────────────────────────────────────────────
 
@@ -207,6 +211,7 @@ export default function ReportsTab() {
   const { toast } = useToast();
   const lang = language as Locale;
 
+  const [reportView, setReportView] = useState<ReportView>("dashboard");
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([]);
@@ -445,28 +450,44 @@ export default function ReportsTab() {
   return (
     <>
     <ToolbarPortal>
-      <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
-        <TBtn onClick={handleCSV} disabled={itemRows.length === 0}>
-          <Download className="h-3.5 w-3.5" /> CSV
+      <ToolbarGroup label={lang === "es" ? "Vista" : "View"}>
+        <TBtn active={reportView === "dashboard"} onClick={() => setReportView("dashboard")}>
+          <BarChart3 className="h-3.5 w-3.5" /> Dashboard
         </TBtn>
-        <TBtn onClick={handlePDF} disabled={pdfGenerating}>
-          <FileText className="h-3.5 w-3.5" />{" "}
-          {pdfGenerating ? (lang === "es" ? "Generando…" : "Generating…") : "PDF"}
+        <TBtn active={reportView === "executive"} onClick={() => setReportView("executive")}>
+          <ClipboardList className="h-3.5 w-3.5" /> {lang === "es" ? "Resumen Ejecutivo" : "Executive Summary"}
         </TBtn>
       </ToolbarGroup>
       <ToolbarSep />
-      <TBtn onClick={() => setRefreshKey((k) => k + 1)}>
-        <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-        {lang === "es" ? "Actualizar" : "Refresh"}
-      </TBtn>
-      <TBtn onClick={handleShare}>
-        <Link2 className="h-3.5 w-3.5" /> {lang === "es" ? "Compartir" : "Share"}
-      </TBtn>
+      {reportView === "dashboard" && (
+        <>
+          <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
+            <TBtn onClick={handleCSV} disabled={itemRows.length === 0}>
+              <Download className="h-3.5 w-3.5" /> CSV
+            </TBtn>
+            <TBtn onClick={handlePDF} disabled={pdfGenerating}>
+              <FileText className="h-3.5 w-3.5" />{" "}
+              {pdfGenerating ? (lang === "es" ? "Generando…" : "Generating…") : "PDF"}
+            </TBtn>
+          </ToolbarGroup>
+          <ToolbarSep />
+          <TBtn onClick={() => setRefreshKey((k) => k + 1)}>
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            {lang === "es" ? "Actualizar" : "Refresh"}
+          </TBtn>
+          <TBtn onClick={handleShare}>
+            <Link2 className="h-3.5 w-3.5" /> {lang === "es" ? "Compartir" : "Share"}
+          </TBtn>
+        </>
+      )}
       <TBtn onClick={() => window.print()}>
         <Printer className="h-3.5 w-3.5" /> {lang === "es" ? "Imprimir" : "Print"}
       </TBtn>
     </ToolbarPortal>
 
+    {reportView === "executive" ? (
+      <ExecutiveSummary />
+    ) : (
     <div className="flex flex-col gap-6">
       {/* ── Top row: 4 Metric Cards ─────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -752,6 +773,7 @@ export default function ReportsTab() {
         </div>
       </div>
     </div>
+    )}
     </>
   );
 }

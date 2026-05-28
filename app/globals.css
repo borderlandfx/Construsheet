@@ -141,3 +141,53 @@
       color            120ms ease !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   Print styles — Executive Summary & Reports
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media print {
+  /* Hide everything except report content */
+  nav,
+  header,
+  aside,
+  #cs-contextual-toolbar,
+  [data-sidebar],
+  [data-navbar],
+  .scrollbar-none {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+    color: #111827 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Show only the executive summary report */
+  .executive-summary-report {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 20px 30px !important;
+    background: #fff !important;
+  }
+
+  /* Page breaks for major sections */
+  .executive-summary-report table {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure orange accents print */
+  .executive-summary-report * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 0.5in;
+    size: letter portrait;
+  }
+}
