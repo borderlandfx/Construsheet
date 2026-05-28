@@ -711,6 +711,7 @@ function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId
     onSaved: (item: ApuItem) => void; onCancel: () => void }
 ) {
   const supabase = createClient();
+  const { toast } = useToast();
   const [draft, setDraft]         = useState<EditorDraft>(initialDraft);
   const [saving, setSaving]       = useState(false);
   const [showLibrary, setShowLib] = useState(false);
@@ -749,6 +750,10 @@ function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId
 
   async function handleSave() {
     if (!draft.code.trim() || !draft.description.trim() || !draft.unit.trim()) return;
+    if (!projectId) {
+      toast(language === "es" ? "No hay proyecto seleccionado" : "No project selected", "error");
+      return;
+    }
     setSaving(true);
     const c = calcCostsDetailed(draft, projectSettings);
     const payload = {
@@ -757,9 +762,9 @@ function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId
       description:   draft.description.trim(),
       unit:          draft.unit.trim(),
       category:      draft.category || null,
-      materials:     draft.materials,
-      labor:         draft.labor,
-      equipment:     draft.equipment,
+      materials:     draft.materials  || [],
+      labor:         draft.labor      || [],
+      equipment:     draft.equipment  || [],
       direct_cost:   c.directCost,
       overhead_pct:  projectSettings.ggen.pct + projectSettings.pgas1.pct + projectSettings.pgas2.pct,
       profit_pct:    projectSettings.util.pct,
@@ -774,7 +779,17 @@ function APUEditor({ initialDraft, language, currency: _currency, fmt, projectId
     }
 
     setSaving(false);
-    if (!result.error && result.data) onSaved(result.data as ApuItem);
+    if (result.error) {
+      console.error("[APU SAVE] Error:", result.error);
+      toast(
+        language === "es"
+          ? `Error al guardar APU: ${result.error.message}`
+          : `Failed to save APU: ${result.error.message}`,
+        "error"
+      );
+      return;
+    }
+    if (result.data) onSaved(result.data as ApuItem);
   }
 
   const headerInput: React.CSSProperties = {
