@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Plus, X } from 'lucide-react';
+import { Search, X, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import type { Locale } from '@/lib/utils/i18n';
 
 interface APU {
   id: string;
@@ -10,6 +11,7 @@ interface APU {
   description: string;
   unit: string;
   selling_price: number;
+  category: string | null;
 }
 
 interface Props {
@@ -18,72 +20,129 @@ interface Props {
   projectId: string;
   budgetId: string;
   userId: string;
+  language?: Locale;
   onSuccess: () => void;
 }
 
-export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, userId, onSuccess }: Props) {
+export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, userId, language = "es", onSuccess }: Props) {
   const supabase = createClient();
   const [apus, setApus] = useState<APU[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState<string | null>(null);
+  const [sections, setSections] = useState<string[]>([]);
+  const [selectedSection, setSelectedSection] = useState<string>('');
+  const [newSection, setNewSection] = useState('');
+  const [useNewSection, setUseNewSection] = useState(false);
 
+  const isEs = language === "es";
+
+  // Fetch library APUs
   useEffect(() => {
-    const fetchLibraryAPUs = async () => {
-      if (!userId) return;
-
+    if (!userId) return;
+    async function load() {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('apu_items')
-        .select('*')
-        .eq('is_library', true)
-        .eq('user_id', userId)
-        .order('description', { ascending: true });
-
-      if (error) console.error('Error fetching APUs:', error);
-      setApus(data || []);
+      const [apuRes, secRes] = await Promise.all([
+        supabase
+          .from('apu_items')
+          .select('id, code, description, unit, selling_price, category')
+          .eq('is_library', true)
+          .eq('user_id', userId)
+          .order('description', { ascending: true }),
+        supabase
+          .from('budget_rows')
+          .select('section')
+          .eq('project_id', projectId)
+          .eq('is_chapter', true),
+      ]);
+      setApus((apuRes.data as APU[]) || []);
+      const uniqueSections = Array.from(new Set(
+        (secRes.data ?? []).map((r: { section: string }) => r.section).filter(Boolean)
+      )) as string[];
+      setSections(uniqueSections);
+      if (uniqueSections.length > 0) setSelectedSection(uniqueSections[0]);
       setLoading(false);
-    };
-
-    fetchLibraryAPUs();
-  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }
+    load();
+  }, [userId, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = apus.filter(a =>
     a.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     a.code?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const effectiveSection = useNewSection ? newSection.trim() : selectedSection;
+
   const handleImport = async (apu: APU) => {
-    // Get the highest sort_order in current budget
+    if (!effectiveSection) {
+      alert(isEs ? 'Selecciona o crea una sección primero.' : 'Select or create a section first.');
+      return;
+    }
+    if (!projectId) {
+      alert('Error: no project ID');
+      return;
+    }
+
+    setImporting(apu.id);
+
+    // Get highest sort_order
     const { data: lastRow } = await supabase
       .from('budget_rows')
       .select('sort_order')
       .eq('project_id', projectId)
       .order('sort_order', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+    let nextSortOrder = ((lastRow?.[0]?.sort_order ?? 0) as number) + 1;
 
-    const nextSortOrder = (lastRow?.sort_order || 0) + 10;
+    // If using a new section that doesn't exist, create chapter header first
+    if (useNewSection && !sections.includes(effectiveSection)) {
+      const { error: chErr } = await supabase.from('budget_rows').insert({
+        project_id: projectId,
+        section: effectiveSection,
+        description: effectiveSection,
+        is_chapter: true,
+        code: null,
+        quantity: 0,
+        unit_price: 0,
+        sort_order: nextSortOrder,
+        status: 'pending',
+      });
+      if (chErr) {
+        console.error('[APU Library] Chapter insert error:', chErr);
+        alert(`Error: ${chErr.message}`);
+        setImporting(null);
+        return;
+      }
+      nextSortOrder += 1;
+    }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('budget_rows')
       .insert({
         project_id: projectId,
         budget_id: budgetId || null,
+        apu_item_id: apu.id,
+        section: effectiveSection,
         description: apu.description,
         code: apu.code,
         unit: apu.unit,
         quantity: 1,
         unit_price: apu.selling_price || 0,
-        apu_item_id: apu.id,
+        original_unit_price: apu.selling_price || 0,
+        original_quantity: 1,
         sort_order: nextSortOrder,
-        section: apu.code ? apu.code.split('.')[0] : 'General',
-      });
+        status: 'pending',
+        is_chapter: false,
+      })
+      .select()
+      .single();
+
+    setImporting(null);
 
     if (error) {
-      console.error(error);
-      alert('Error al insertar APU: ' + error.message);
-    } else {
-      alert(`✅ "${apu.description}" agregado correctamente al presupuesto`);
+      console.error('[APU Library] Insert error:', error);
+      alert((isEs ? 'Error al insertar APU: ' : 'Error inserting APU: ') + error.message);
+    } else if (data) {
       onSuccess();
       onClose();
     }
@@ -92,58 +151,144 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
-      <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
-        <div className="p-6 border-b flex justify-between items-center">
-          <h2 className="text-2xl font-semibold flex items-center gap-3">
-            📚 Biblioteca de APUs
-          </h2>
-          <button onClick={onClose} className="text-3xl text-gray-400 hover:text-gray-600">
-            <X size={24} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div
+        className="w-full flex flex-col"
+        style={{
+          maxWidth: 600,
+          maxHeight: "85vh",
+          background: "var(--cs-surface)",
+          border: "1px solid var(--cs-border)",
+          borderRadius: 16,
+          overflow: "hidden",
+          boxShadow: "0 24px 64px rgba(0,0,0,0.5)",
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid var(--cs-border)" }}>
+          <span className="font-syne font-bold text-base" style={{ color: "var(--cs-text)" }}>
+            {isEs ? "Biblioteca de APUs" : "APU Library"}
+          </span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}>
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="p-5 border-b">
-          <div className="relative">
-            <Search className="absolute left-4 top-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar APU..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-11 py-3 bg-gray-100 dark:bg-zinc-800 rounded-xl"
-            />
-          </div>
+        {/* Section selector */}
+        <div className="px-5 py-3 shrink-0" style={{ borderBottom: "1px solid var(--cs-border)" }}>
+          <label className="text-xs font-semibold font-dm-sans uppercase tracking-wider block mb-1.5" style={{ color: "var(--cs-muted)" }}>
+            {isEs ? "Insertar en sección:" : "Insert into section:"}
+          </label>
+          {useNewSection ? (
+            <div className="flex gap-2 items-center">
+              <input
+                value={newSection}
+                onChange={(e) => setNewSection(e.target.value)}
+                placeholder={isEs ? "ej. 01 · TRABAJOS PRELIMINARES" : "e.g. 01 · PRELIMINARY WORKS"}
+                autoFocus
+                className="flex-1 text-sm font-dm-sans rounded-lg px-3 py-2"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--cs-border)", color: "var(--cs-text)", outline: "none" }}
+              />
+              {sections.length > 0 && (
+                <button
+                  onClick={() => { setUseNewSection(false); setNewSection(''); }}
+                  className="text-xs font-dm-sans"
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cs-accent)", whiteSpace: "nowrap" }}
+                >
+                  ← {isEs ? "volver" : "back"}
+                </button>
+              )}
+            </div>
+          ) : (
+            <select
+              value={selectedSection}
+              onChange={(e) => {
+                if (e.target.value === "__new__") setUseNewSection(true);
+                else setSelectedSection(e.target.value);
+              }}
+              className="w-full text-sm font-dm-sans rounded-lg px-3 py-2"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--cs-border)", color: "var(--cs-text)", cursor: "pointer" }}
+            >
+              {sections.map((s) => <option key={s} value={s}>{s}</option>)}
+              <option value="__new__">{isEs ? "+ Nueva sección..." : "+ New section..."}</option>
+            </select>
+          )}
         </div>
 
-        <div className="flex-1 overflow-auto p-5">
+        {/* Search */}
+        <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ borderBottom: "1px solid var(--cs-border)", background: "rgba(255,255,255,0.02)" }}>
+          <Search className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cs-muted)" }} />
+          <input
+            type="text"
+            placeholder={isEs ? "Buscar APU..." : "Search APU..."}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="flex-1 bg-transparent text-sm font-dm-sans outline-none"
+            style={{ color: "var(--cs-text)" }}
+          />
+        </div>
+
+        {/* APU list */}
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <p className="text-center py-20">Cargando biblioteca...</p>
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--cs-muted)" }} />
+            </div>
           ) : filtered.length === 0 ? (
-            <p className="text-center py-20 text-gray-500">No se encontraron APUs</p>
+            <p className="text-center py-12 text-sm font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+              {isEs ? "No se encontraron APUs en tu biblioteca" : "No APUs found in your library"}
+            </p>
           ) : (
-            <div className="space-y-3">
+            <div className="flex flex-col">
               {filtered.map(apu => (
-                <div key={apu.id} className="flex justify-between items-center p-5 border rounded-xl hover:border-orange-500">
+                <button
+                  key={apu.id}
+                  type="button"
+                  onClick={() => handleImport(apu)}
+                  disabled={importing === apu.id}
+                  className="flex items-center justify-between px-5 py-3 text-left w-full"
+                  style={{
+                    borderBottom: "1px solid var(--cs-border)",
+                    background: "transparent",
+                    border: "none",
+                    borderBlockEnd: "1px solid var(--cs-border)",
+                    cursor: importing === apu.id ? "wait" : "pointer",
+                    opacity: importing === apu.id ? 0.6 : 1,
+                  }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.04)"; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                >
                   <div>
-                    <div className="font-medium">{apu.description}</div>
-                    <div className="text-sm text-gray-500">{apu.code} • {apu.unit}</div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-xl font-semibold text-orange-600">
-                      ${apu.selling_price?.toLocaleString()}
+                    <div className="font-dm-sans text-sm font-medium" style={{ color: "var(--cs-text)" }}>
+                      {importing === apu.id ? (
+                        <span className="flex items-center gap-1.5" style={{ color: "var(--cs-accent)" }}>
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {isEs ? "Insertando..." : "Inserting..."}
+                        </span>
+                      ) : (
+                        apu.description
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleImport(apu)}
-                      className="bg-orange-600 text-white px-6 py-3 rounded-xl hover:bg-orange-700 flex items-center gap-2"
-                    >
-                      <Plus size={20} /> Insertar
-                    </button>
+                    <div className="font-dm-sans text-xs mt-0.5" style={{ color: "var(--cs-muted)" }}>
+                      <code style={{ color: "var(--cs-accent)" }}>{apu.code}</code> · {apu.unit}
+                    </div>
                   </div>
-                </div>
+                  <div className="font-dm-sans text-sm font-semibold shrink-0 ml-4" style={{ color: "var(--cs-accent)" }}>
+                    ${apu.selling_price?.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
+                  </div>
+                </button>
               ))}
             </div>
           )}
+        </div>
+
+        {/* Footer hint */}
+        <div className="px-4 py-2.5 text-xs font-dm-sans shrink-0" style={{ color: "var(--cs-muted)", borderTop: "1px solid var(--cs-border)", background: "rgba(255,255,255,0.02)" }}>
+          {isEs ? "Haz clic en un APU para insertarlo en el presupuesto." : "Click an APU to insert it into the budget."}
         </div>
       </div>
     </div>

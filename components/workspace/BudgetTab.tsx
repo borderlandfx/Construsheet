@@ -2739,9 +2739,8 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
           projectId={projectId} language={lang}
           sections={sections.length > 0 ? sections : []}
           rowCount={rows.length}
-          onSaved={(row) => {
-            setRows((p) => [...p, row]);
-            // DB trigger creates gantt task
+          onSaved={() => {
+            refetchBudgetRows();
           }}
           onClose={() => setShowImport(false)}
         />
@@ -2754,6 +2753,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         projectId={projectId}
         budgetId={projectId}
         userId={userId}
+        language={lang}
         onSuccess={() => {
           refetchBudgetRows();
         }}
@@ -2800,9 +2800,9 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
 
 // ─── ImportAPUModal (retained from original) ─────────────────────────────────
 
-function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onClose }:
-  { projectId: string; language: Locale; sections: string[]; rowCount: number;
-    onSaved: (row: BudgetRow) => void; onClose: () => void }
+function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
+  { projectId: string; language: Locale; sections: string[]; rowCount?: number;
+    onSaved: () => void; onClose: () => void }
 ) {
   const supabase = createClient();
   const [apuItems, setApuItems] = useState<ApuItem[]>([]);
@@ -2834,13 +2834,50 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
       toast(language === "es" ? "Selecciona o crea una sección primero" : "Select or create a section first", "error");
       return;
     }
+    if (!projectId) {
+      toast("Error: no project ID", "error");
+      return;
+    }
     setImporting(apu.id);
+
+    // Get max sort_order
+    const { data: lastRow } = await supabase
+      .from("budget_rows")
+      .select("sort_order")
+      .eq("project_id", projectId)
+      .order("sort_order", { ascending: false })
+      .limit(1);
+    let nextOrder = ((lastRow?.[0]?.sort_order ?? 0) as number) + 1;
+
+    // If new section, create chapter header row first
+    const isNewSection = section === "__new__";
+    if (isNewSection) {
+      const { error: chErr } = await supabase.from("budget_rows").insert({
+        project_id: projectId,
+        section: effectiveSec,
+        description: effectiveSec,
+        is_chapter: true,
+        code: null,
+        quantity: 0,
+        unit_price: 0,
+        sort_order: nextOrder,
+        status: "pending",
+      }).select().single();
+      if (chErr) {
+        console.error("[IMPORT APU] Chapter insert error:", chErr);
+        toast(language === "es" ? `Error al crear sección: ${chErr.message}` : `Failed to create section: ${chErr.message}`, "error");
+        setImporting(null);
+        return;
+      }
+      nextOrder += 1;
+    }
+
     const payload: BudgetRowInsert = {
       project_id: projectId, apu_item_id: apu.id, section: effectiveSec,
       code: apu.code, description: apu.description, unit: apu.unit,
       quantity: 0, unit_price: apu.selling_price,
       original_unit_price: apu.selling_price, original_quantity: 0,
-      status: "pending", sort_order: rowCount,
+      status: "pending", sort_order: nextOrder, is_chapter: false,
     };
     const { data, error } = await supabase.from("budget_rows").insert(payload).select().single();
     setImporting(null);
@@ -2849,7 +2886,7 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
       toast(language === "es" ? `Error al importar: ${error.message}` : `Import failed: ${error.message}`, "error");
       return;
     }
-    if (data) { onSaved(data as BudgetRow); onClose(); }
+    if (data) { onSaved(); onClose(); }
   }
 
   return (
