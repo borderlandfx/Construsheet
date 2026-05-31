@@ -49,14 +49,13 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
 
   // Load workspace data — APU Library is now GLOBAL
   const [apuItems, budgetRows, ganttTasks, takeoffItems] = await Promise.all([
-    // GLOBAL APU LIBRARY (shared across all budgets)
+    // All APUs: project-specific + global library
     safeQuery(
       supabase
         .from("apu_items")
         .select("*")
-        .eq("is_library", true)
-        .eq("user_id", user.id)
-        .order("description", { ascending: true })
+        .or(`project_id.eq.${id},is_library.eq.true`)
+        .order("code", { ascending: true })
     ),
 
     // Project-specific data

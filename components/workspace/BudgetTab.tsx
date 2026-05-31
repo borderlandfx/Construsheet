@@ -2812,7 +2812,9 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
   const [importing, setImporting] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.from("apu_items").select("*").eq("project_id", projectId).order("code")
+    supabase.from("apu_items").select("*")
+      .or(`project_id.eq.${projectId},is_library.eq.true`)
+      .order("code", { ascending: true })
       .then(({ data }) => { setApuItems((data as ApuItem[]) ?? []); setLoading(false); });
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2824,7 +2826,9 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
 
   const effectiveSec = section === "__new__" ? newSec.trim() : section.trim();
   const filtered = apuItems.filter((a) =>
-    a.description.toLowerCase().includes(query.toLowerCase()) || a.code.toLowerCase().includes(query.toLowerCase())
+    a.description?.toLowerCase().includes(query.toLowerCase()) ||
+    a.code?.toLowerCase().includes(query.toLowerCase()) ||
+    a.category?.toLowerCase().includes(query.toLowerCase())
   );
 
   async function handleImport(apu: ApuItem) {
