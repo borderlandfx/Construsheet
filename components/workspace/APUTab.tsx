@@ -219,10 +219,10 @@ export interface CostCalc {
   matSub: number;
   labSub: number;
   eqpSub: number;
+  matTotal: number;
+  labTotal: number;
+  eqpTotal: number;
   directCost: number;
-  ggenVal: number;
-  pgas1Val: number;
-  pgas2Val: number;
   netCost: number;
   utilVal: number;
   sellingPrice: number;
@@ -234,30 +234,35 @@ export interface CostCalc {
 export function calcCostsDetailed(draft: EditorDraft, s: ProjectIndirectCosts): CostCalc {
   const sumArr = (arr: ApuLineItem[]) => arr.reduce((t, r) => t + r.qty * r.unit_price, 0);
 
-  // Step 1: Costo Directo = sum of raw subtotals
+  // Step 1-2: Raw subtotals (partials are just qty × unit_price)
   const matSub  = sumArr(draft.materials);
   const labSub  = sumArr(draft.labor);
   const eqpSub  = sumArr(draft.equipment);
-  const directCost = matSub + labSub + eqpSub;
 
-  // Step 2-3: Costos Indirectos / Gastos Generales → Costo Neto
-  const ggenVal  = directCost * s.ggen.pct  / 100;
-  const pgas1Val = directCost * s.pgas1.pct / 100;
-  const pgas2Val = directCost * s.pgas2.pct / 100;
-  const netCost  = directCost + ggenVal + pgas1Val + pgas2Val;
+  // Step 3: Apply section-level indirect costs to subtotals
+  const matTotal = matSub * (1 + s.pmat1.pct / 100 + s.pmat2.pct / 100);
+  const labTotal = labSub * (1 + s.pmob1.pct / 100 + s.pmob2.pct / 100);
+  const eqpTotal = eqpSub * (1 + s.pmaq1.pct / 100 + s.pmaq2.pct / 100);
 
-  // Step 4-5: Utilidad → Precio de Venta
+  // Step 4: Direct cost
+  const directCost = matTotal + labTotal + eqpTotal;
+
+  // Step 5: Net cost = CD × (1 + ggen/100)
+  const netCost = directCost * (1 + s.ggen.pct / 100);
+
+  // Step 6: Selling price = CN × (1 + util/100)
   const utilVal      = netCost * s.util.pct / 100;
-  const sellingPrice = netCost + utilVal;
+  const sellingPrice = netCost * (1 + s.util.pct / 100);
 
-  // Step 6-7: Impuestos → Precio Unitario Final
+  // Step 7: Final unit price = PV × (1 + tot1/100 + tot2/100)
   const tot1Val    = sellingPrice * s.tot1.pct / 100;
   const tot2Val    = sellingPrice * s.tot2.pct / 100;
-  const finalPrice = sellingPrice + tot1Val + tot2Val;
+  const finalPrice = sellingPrice * (1 + s.tot1.pct / 100 + s.tot2.pct / 100);
 
   return {
     matSub, labSub, eqpSub,
-    directCost, ggenVal, pgas1Val, pgas2Val, netCost,
+    matTotal, labTotal, eqpTotal,
+    directCost, netCost,
     utilVal, sellingPrice, tot1Val, tot2Val, finalPrice,
   };
 }
@@ -634,11 +639,12 @@ function DetailedCostSummary({ draft, settings, fmt, language }:
   return (
     <div style={{ background: "rgba(249,115,22,0.03)" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1rem 1.25rem" }}>
-        {/* Step 1: Costo Directo */}
+        {/* Section subtotals with per-section indirects */}
         <div>
           <p className="text-xs font-syne font-bold mb-2 uppercase tracking-wider" style={{ color: CS.muted }}>
-            {lang === "es" ? "1. Costo Directo (CD)" : "1. Direct Cost (DC)"}
+            {lang === "es" ? "Desglose por sección" : "Section breakdown"}
           </p>
+          {/* Materials */}
           <div style={{ ...rowStyle, paddingLeft: 0 }}>
             <span style={{ display: "flex", alignItems: "center", ...labelStyle }}>
               <span style={sectionDot("#22c55e")} />
@@ -646,6 +652,11 @@ function DetailedCostSummary({ draft, settings, fmt, language }:
             </span>
             <span style={valueStyle}>{fmt(c.matSub)}</span>
           </div>
+          {settings.pmat1.pct > 0 && <Row label={settings.pmat1.label || (lang === "es" ? "Flete y acarreos" : "Freight & handling")} pct={settings.pmat1.pct} value={c.matSub * settings.pmat1.pct / 100} indent />}
+          {settings.pmat2.pct > 0 && <Row label={settings.pmat2.label || (lang === "es" ? "Merma y desperdicio" : "Waste & spoilage")} pct={settings.pmat2.pct} value={c.matSub * settings.pmat2.pct / 100} indent />}
+          {(settings.pmat1.pct > 0 || settings.pmat2.pct > 0) && <Row label={lang === "es" ? "Total Materiales" : "Materials Total"} value={c.matTotal} bold />}
+          <Divider />
+          {/* Labor */}
           <div style={{ ...rowStyle, paddingLeft: 0 }}>
             <span style={{ display: "flex", alignItems: "center", ...labelStyle }}>
               <span style={sectionDot("#3b82f6")} />
@@ -653,6 +664,11 @@ function DetailedCostSummary({ draft, settings, fmt, language }:
             </span>
             <span style={valueStyle}>{fmt(c.labSub)}</span>
           </div>
+          {settings.pmob1.pct > 0 && <Row label={settings.pmob1.label || (lang === "es" ? "Seguridad y higiene" : "Safety & hygiene")} pct={settings.pmob1.pct} value={c.labSub * settings.pmob1.pct / 100} indent />}
+          {settings.pmob2.pct > 0 && <Row label={settings.pmob2.label || "FSR"} pct={settings.pmob2.pct} value={c.labSub * settings.pmob2.pct / 100} indent />}
+          {(settings.pmob1.pct > 0 || settings.pmob2.pct > 0) && <Row label={lang === "es" ? "Total Mano de Obra" : "Labor Total"} value={c.labTotal} bold />}
+          <Divider />
+          {/* Equipment */}
           <div style={{ ...rowStyle, paddingLeft: 0 }}>
             <span style={{ display: "flex", alignItems: "center", ...labelStyle }}>
               <span style={sectionDot("#a855f7")} />
@@ -660,44 +676,31 @@ function DetailedCostSummary({ draft, settings, fmt, language }:
             </span>
             <span style={valueStyle}>{fmt(c.eqpSub)}</span>
           </div>
-          <Divider />
-          <Row label={lang === "es" ? "Costo Directo (CD)" : "Direct Cost (DC)"} value={c.directCost} bold />
+          {settings.pmaq1.pct > 0 && <Row label={settings.pmaq1.label || (lang === "es" ? "Herramienta menor" : "Small tools")} pct={settings.pmaq1.pct} value={c.eqpSub * settings.pmaq1.pct / 100} indent />}
+          {settings.pmaq2.pct > 0 && <Row label={settings.pmaq2.label || "pmaq2"} pct={settings.pmaq2.pct} value={c.eqpSub * settings.pmaq2.pct / 100} indent />}
+          {(settings.pmaq1.pct > 0 || settings.pmaq2.pct > 0) && <Row label={lang === "es" ? "Total Equipos" : "Equipment Total"} value={c.eqpTotal} bold />}
         </div>
 
-        {/* Step 2-3: Costos Indirectos → Costo Neto */}
-        {(settings.ggen.pct > 0 || settings.pgas1.pct > 0 || settings.pgas2.pct > 0) && (
-          <div>
-            <p className="text-xs font-syne font-bold mb-2 uppercase tracking-wider" style={{ color: CS.muted }}>
-              {lang === "es" ? "2. Costos Indirectos" : "2. Indirect Costs"}
-            </p>
-            {settings.ggen.pct  > 0 && <Row label={settings.ggen.label  || (lang === "es" ? "Gastos generales y admin." : "General & admin expenses")} pct={settings.ggen.pct}  value={c.ggenVal}  indent />}
-            {settings.pgas1.pct > 0 && <Row label={settings.pgas1.label || "pgas1"} pct={settings.pgas1.pct} value={c.pgas1Val} indent />}
-            {settings.pgas2.pct > 0 && <Row label={settings.pgas2.label || "pgas2"} pct={settings.pgas2.pct} value={c.pgas2Val} indent />}
-            <Divider />
-            <Row label={lang === "es" ? "Costo Neto (CN)" : "Net Cost (NC)"} value={c.netCost} bold />
-          </div>
-        )}
-
-        {/* Step 4-5: Utilidad → Precio de Venta */}
+        {/* Costo Directo */}
         <div>
           <p className="text-xs font-syne font-bold mb-2 uppercase tracking-wider" style={{ color: CS.muted }}>
-            {lang === "es" ? "3. Utilidad" : "3. Profit"}
+            {lang === "es" ? "Precio Unitario" : "Unit Price"}
           </p>
-          {settings.util.pct > 0 && <Row label={settings.util.label || (lang === "es" ? "Utilidad" : "Profit")} pct={settings.util.pct} value={c.utilVal} indent />}
+          <Row label={lang === "es" ? "Costo Directo (CD)" : "Direct Cost (DC)"} value={c.directCost} bold />
           <Divider />
+          {settings.ggen.pct > 0 && <Row label={settings.ggen.label || (lang === "es" ? "Gastos generales y admin." : "General & admin expenses")} pct={settings.ggen.pct} value={c.directCost * settings.ggen.pct / 100} indent />}
+          <Row label={lang === "es" ? "Costo Neto (CN)" : "Net Cost (NC)"} value={c.netCost} bold />
+          <Divider />
+          {settings.util.pct > 0 && <Row label={settings.util.label || (lang === "es" ? "Utilidad" : "Profit")} pct={settings.util.pct} value={c.utilVal} indent />}
           <Row label={lang === "es" ? "Precio de Venta (PV)" : "Selling Price (SP)"} value={c.sellingPrice} bold />
+          {(settings.tot1.pct > 0 || settings.tot2.pct > 0) && (
+            <>
+              <Divider />
+              {settings.tot1.pct > 0 && <Row label={settings.tot1.label || "IVA"} pct={settings.tot1.pct} value={c.tot1Val} indent />}
+              {settings.tot2.pct > 0 && <Row label={settings.tot2.label || "Impuesto 2"} pct={settings.tot2.pct} value={c.tot2Val} indent />}
+            </>
+          )}
         </div>
-
-        {/* Step 6-7: Impuestos → Precio Unitario Final */}
-        {(settings.tot1.pct > 0 || settings.tot2.pct > 0) && (
-          <div>
-            <p className="text-xs font-syne font-bold mb-2 uppercase tracking-wider" style={{ color: CS.muted }}>
-              {lang === "es" ? "4. Impuestos" : "4. Taxes"}
-            </p>
-            {settings.tot1.pct > 0 && <Row label={settings.tot1.label || "Impuesto 1"} pct={settings.tot1.pct} value={c.tot1Val} indent />}
-            {settings.tot2.pct > 0 && <Row label={settings.tot2.label || "Impuesto 2"} pct={settings.tot2.pct} value={c.tot2Val} indent />}
-          </div>
-        )}
 
         {/* Final price */}
         <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(249,115,22,0.1)", border: `1px solid rgba(249,115,22,0.25)` }}>
@@ -1020,30 +1023,13 @@ function printAPU(item: ApuItem, settings: ProjectIndirectCosts, fmt: (n: number
   const equiHtml = sectionHtml(lang === "es" ? "Equipos"     : "Equipment",  draft.equipment,  "#a855f7");
 
   let priceCalc = "";
-  // Step 1: Costo Directo
-  priceCalc += `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin-bottom:4px">${lang === "es" ? "1. Costo Directo" : "1. Direct Cost"}</div>`;
-  priceCalc += calcRow(lang === "es" ? "Subtotal Materiales" : "Materials Subtotal", c.matSub, undefined, true);
-  priceCalc += calcRow(lang === "es" ? "Subtotal Mano de Obra" : "Labor Subtotal", c.labSub, undefined, true);
-  priceCalc += calcRow(lang === "es" ? "Subtotal Equipos" : "Equipment Subtotal", c.eqpSub, undefined, true);
   priceCalc += calcRow(lang === "es" ? "Costo Directo (CD)" : "Direct Cost (DC)", c.directCost);
-  // Step 2-3: Costos Indirectos → Costo Neto
-  if (settings.ggen.pct > 0 || settings.pgas1.pct > 0 || settings.pgas2.pct > 0) {
-    priceCalc += `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:6px 0 4px">${lang === "es" ? "2. Costos Indirectos" : "2. Indirect Costs"}</div>`;
-    if (settings.ggen.pct  > 0) priceCalc += calcRow(settings.ggen.label  || "Gastos generales", c.ggenVal,  settings.ggen.pct,  true);
-    if (settings.pgas1.pct > 0) priceCalc += calcRow(settings.pgas1.label || "pgas1",             c.pgas1Val, settings.pgas1.pct, true);
-    if (settings.pgas2.pct > 0) priceCalc += calcRow(settings.pgas2.label || "pgas2",             c.pgas2Val, settings.pgas2.pct, true);
-    priceCalc += calcRow(lang === "es" ? "Costo Neto (CN)" : "Net Cost (NC)", c.netCost);
-  }
-  // Step 4-5: Utilidad → Precio de Venta
-  priceCalc += `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:6px 0 4px">${lang === "es" ? "3. Utilidad" : "3. Profit"}</div>`;
+  if (settings.ggen.pct > 0) priceCalc += calcRow(settings.ggen.label || "Gastos generales", c.directCost * settings.ggen.pct / 100, settings.ggen.pct, true);
+  priceCalc += calcRow(lang === "es" ? "Costo Neto (CN)" : "Net Cost (NC)", c.netCost);
   if (settings.util.pct > 0) priceCalc += calcRow(settings.util.label || "Utilidad", c.utilVal, settings.util.pct, true);
   priceCalc += calcRow(lang === "es" ? "Precio de Venta (PV)" : "Selling Price (SP)", c.sellingPrice);
-  // Step 6-7: Impuestos
-  if (settings.tot1.pct > 0 || settings.tot2.pct > 0) {
-    priceCalc += `<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:6px 0 4px">${lang === "es" ? "4. Impuestos" : "4. Taxes"}</div>`;
-    if (settings.tot1.pct > 0) priceCalc += calcRow(settings.tot1.label || "Impuesto 1", c.tot1Val, settings.tot1.pct, true);
-    if (settings.tot2.pct > 0) priceCalc += calcRow(settings.tot2.label || "Impuesto 2", c.tot2Val, settings.tot2.pct, true);
-  }
+  if (settings.tot1.pct > 0) priceCalc += calcRow(settings.tot1.label || "IVA", c.tot1Val, settings.tot1.pct, true);
+  if (settings.tot2.pct > 0) priceCalc += calcRow(settings.tot2.label || "Impuesto 2", c.tot2Val, settings.tot2.pct, true);
 
   const html = `<!DOCTYPE html><html lang="${lang}"><head><meta charset="UTF-8"/>
   <title>APU — ${item.code}</title>

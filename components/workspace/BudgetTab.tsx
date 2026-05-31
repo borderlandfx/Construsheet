@@ -1065,9 +1065,7 @@ function APUDetailPanel({ row, apuItem, language, fmt, onClose, onNavigateToImpo
 
                 <CostRow label={lang === "es" ? "Costo Directo (CD)" : "Direct Cost (CD)"} value={c.directCost} bold />
 
-                {projectSettings.ggen.pct  > 0 && <CostRow label={projectSettings.ggen.label  || "Gastos generales"} pct={projectSettings.ggen.pct}  value={c.ggenVal}  indent />}
-                {projectSettings.pgas1.pct > 0 && <CostRow label={projectSettings.pgas1.label || "pgas1"}            pct={projectSettings.pgas1.pct} value={c.pgas1Val} indent />}
-                {projectSettings.pgas2.pct > 0 && <CostRow label={projectSettings.pgas2.label || "pgas2"}            pct={projectSettings.pgas2.pct} value={c.pgas2Val} indent />}
+                {projectSettings.ggen.pct > 0 && <CostRow label={projectSettings.ggen.label || "Gastos generales"} pct={projectSettings.ggen.pct} value={c.directCost * projectSettings.ggen.pct / 100} indent />}
 
                 <CostRow label={lang === "es" ? "Costo Neto (CN)" : "Net Cost (CN)"} value={c.netCost} bold />
 
@@ -1075,7 +1073,7 @@ function APUDetailPanel({ row, apuItem, language, fmt, onClose, onNavigateToImpo
 
                 <CostRow label={lang === "es" ? "Precio de Venta (PV)" : "Selling Price (PV)"} value={c.sellingPrice} bold />
 
-                {projectSettings.tot1.pct > 0 && <CostRow label={projectSettings.tot1.label || "Impuesto 1"} pct={projectSettings.tot1.pct} value={c.tot1Val} indent />}
+                {projectSettings.tot1.pct > 0 && <CostRow label={projectSettings.tot1.label || "IVA"} pct={projectSettings.tot1.pct} value={c.tot1Val} indent />}
                 {projectSettings.tot2.pct > 0 && <CostRow label={projectSettings.tot2.label || "Impuesto 2"} pct={projectSettings.tot2.pct} value={c.tot2Val} indent />}
 
                 <div className="mt-3 p-3 rounded-xl"

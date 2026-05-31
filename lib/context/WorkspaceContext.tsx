@@ -7,7 +7,7 @@ import React, {
   useState,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { fmt as fmtCurrency, type Currency } from "@/lib/utils/currency";
+import { formatCurrency as fmtCurrency, type Currency } from "@/lib/utils/currency";
 import type { Locale } from "@/lib/utils/i18n";
 import type { TabId } from "@/components/workspace/TabBar";
 import {
