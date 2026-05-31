@@ -37,17 +37,25 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
 
   const isEs = language === "es";
 
-  // Fetch library APUs
+  // Fetch global library APUs + project-specific APUs
   useEffect(() => {
     if (!userId) return;
     async function load() {
       setLoading(true);
-      const [apuRes, secRes] = await Promise.all([
+      const [libraryRes, projectRes, secRes] = await Promise.all([
+        // Global catalog: all library APUs owned by this user
         supabase
           .from('apu_items')
           .select('id, code, description, unit, selling_price, category')
           .eq('is_library', true)
           .eq('user_id', userId)
+          .order('description', { ascending: true }),
+        // Project-specific APUs (non-library) for the current project
+        supabase
+          .from('apu_items')
+          .select('id, code, description, unit, selling_price, category')
+          .eq('project_id', projectId)
+          .eq('is_library', false)
           .order('description', { ascending: true }),
         supabase
           .from('budget_rows')
@@ -55,7 +63,15 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
           .eq('project_id', projectId)
           .eq('is_chapter', true),
       ]);
-      setApus((apuRes.data as APU[]) || []);
+      // Merge and deduplicate by id
+      const libraryApus = (libraryRes.data as APU[]) || [];
+      const projectApus = (projectRes.data as APU[]) || [];
+      const seen = new Set<string>();
+      const merged: APU[] = [];
+      for (const apu of [...libraryApus, ...projectApus]) {
+        if (!seen.has(apu.id)) { seen.add(apu.id); merged.push(apu); }
+      }
+      setApus(merged);
       const uniqueSections = Array.from(new Set(
         (secRes.data ?? []).map((r: { section: string }) => r.section).filter(Boolean)
       )) as string[];

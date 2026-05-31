@@ -42,6 +42,11 @@ export default function RootLayout({
           <ToastProvider>
             {children}
             <ToastContainer />
+            {process.env.NEXT_PUBLIC_ENABLE_PRO_LIMITS !== 'true' && (
+              <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#f59e0b", color: "#000", textAlign: "center", fontSize: 11, padding: 3, zIndex: 9999, fontFamily: "system-ui" }}>
+                DEV MODE — Pro limits disabled (NEXT_PUBLIC_ENABLE_PRO_LIMITS=false)
+              </div>
+            )}
           </ToastProvider>
         </ThemeProvider>
       </body>

@@ -1,9 +1,14 @@
+// To enable Pro limits in production: set NEXT_PUBLIC_ENABLE_PRO_LIMITS=true
+// in Vercel environment variables or .env.local
+// Currently disabled for development
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export type Plan = "free" | "pro";
+
+const LIMITS_ENABLED = process.env.NEXT_PUBLIC_ENABLE_PRO_LIMITS === 'true';
 
 export interface PlanGate {
   createProject: (projectCount: number) => boolean;
@@ -46,19 +51,31 @@ export function usePlan(userId: string) {
   }, [userId]);
 
   const can: PlanGate = useMemo(() => ({
-    createProject: (projectCount: number) => plan === "pro" || projectCount < 1,
-    createAPU: (apuCount: number) => plan === "pro" || apuCount < 10,
-    useAI: () => plan === "pro",
-    exportPDF: () => plan === "pro",
-    exportCSV: () => plan === "pro",
-    inviteTeam: () => plan === "pro",
-    varianceReport: () => plan === "pro",
-    versionHistory: () => plan === "pro",
-    executiveSummary: () => plan === "pro",
-    fullSchedule: () => plan === "pro",
+    createProject: (projectCount: number) =>
+      !LIMITS_ENABLED || plan === "pro" || projectCount < 1,
+    createAPU: (apuCount: number) =>
+      !LIMITS_ENABLED || plan === "pro" || apuCount < 10,
+    useAI: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    exportPDF: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    exportCSV: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    inviteTeam: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    varianceReport: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    versionHistory: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    executiveSummary: () =>
+      !LIMITS_ENABLED || plan === "pro",
+    fullSchedule: () =>
+      !LIMITS_ENABLED || plan === "pro",
   }), [plan]);
 
   const isPro = plan === "pro";
 
   return { plan, can, isPro, loading };
 }
+
+export { LIMITS_ENABLED };
