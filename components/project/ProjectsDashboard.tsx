@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import ProjectCard, { type ProjectWithBudget } from "./ProjectCard";
@@ -45,13 +45,57 @@ function CardSkeleton() {
   );
 }
 
-export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardProps) {
+function LangToggle({ value, onChange }: { value: Locale; onChange: (v: Locale) => void }) {
+  return (
+    <div
+      className="inline-flex rounded-lg overflow-hidden"
+      style={{ border: "1px solid var(--cs-border)", background: "rgba(255,255,255,0.03)" }}
+    >
+      {(["es", "en"] as Locale[]).map((opt) => {
+        const active = opt === value;
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            className="px-3 py-1 text-xs font-semibold font-dm-sans transition-all duration-150"
+            style={{
+              background: active ? "var(--cs-accent)" : "transparent",
+              color: active ? "#fff" : "var(--cs-muted)",
+              border: "none",
+              cursor: "pointer",
+              minWidth: 36,
+            }}
+          >
+            {opt.toUpperCase()}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function ProjectsDashboard({ userId, locale: initialLocale }: ProjectsDashboardProps) {
   const router = useRouter();
   const supabase = createClient();
   const [projects, setProjects] = useState<ProjectWithBudget[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [lang, setLang] = useState<Locale>(initialLocale);
+
+  // Sync language from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("cs-lang") as Locale | null;
+    if (saved && (saved === "es" || saved === "en")) setLang(saved);
+  }, []);
+
+  // Language change handler — persist to localStorage + Supabase profile
+  const handleLangChange = useCallback((newLang: Locale) => {
+    setLang(newLang);
+    localStorage.setItem("cs-lang", newLang);
+    supabase.from("profiles").update({ language: newLang }).eq("id", userId);
+  }, [supabase, userId]);
 
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -98,7 +142,7 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
     setProjects((prev) => [newProject, ...prev]);
   }
 
-  const isEs = locale === "es";
+  const isEs = lang === "es";
 
   // Portfolio-level aggregates (derived from full list, not filtered)
   const portfolioTotal = projects.reduce(
@@ -131,7 +175,7 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
             className="font-syne font-bold text-2xl"
             style={{ color: "var(--cs-text)", letterSpacing: "-0.03em" }}
           >
-            {t("myProjects", locale)}
+            {t("myProjects", lang)}
           </h1>
           {!loading && (
             <span
@@ -148,11 +192,14 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
             </span>
           )}
         </div>
-        <CreateProjectModal
-          userId={userId}
-          locale={locale}
-          onProjectCreated={handleProjectCreated}
-        />
+        <div className="flex items-center gap-3">
+          <LangToggle value={lang} onChange={handleLangChange} />
+          <CreateProjectModal
+            userId={userId}
+            locale={lang}
+            onProjectCreated={handleProjectCreated}
+          />
+        </div>
       </div>
 
       {/* Portfolio stats strip */}
@@ -287,12 +334,12 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
             <FolderOpen className="h-8 w-8" style={{ color: "var(--cs-accent)" }} />
           </span>
           <h2 className="font-syne font-bold text-xl mb-2" style={{ color: "var(--cs-text)" }}>
-            {t("noProjectsTitle", locale)}
+            {t("noProjectsTitle", lang)}
           </h2>
           <p className="font-dm-sans text-sm mb-8 max-w-xs" style={{ color: "var(--cs-muted)", lineHeight: 1.6 }}>
-            {t("noProjectsDesc", locale)}
+            {t("noProjectsDesc", lang)}
           </p>
-          <CreateProjectModal userId={userId} locale={locale} onProjectCreated={handleProjectCreated} />
+          <CreateProjectModal userId={userId} locale={lang} onProjectCreated={handleProjectCreated} />
         </div>
       )}
 
@@ -334,7 +381,7 @@ export default function ProjectsDashboard({ userId, locale }: ProjectsDashboardP
             <ProjectCard
               key={project.id}
               project={project}
-              locale={locale}
+              locale={lang}
               onUpdated={handleProjectUpdated}
               onDeleted={handleProjectDeleted}
               onDuplicated={handleProjectDuplicated}

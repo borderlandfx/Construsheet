@@ -124,9 +124,58 @@ function ChartSkeleton() {
 
 // ─── Main Component ────────────────────────────────────────────────────────
 
-export default function RollupDashboard({ userId, locale, initialCurrency }: RollupDashboardProps) {
+// ─── Language pill toggle ───────────────────────────────────────────────────
+
+function LangToggle({ value, onChange }: { value: Locale; onChange: (v: Locale) => void }) {
+  return (
+    <div
+      className="inline-flex rounded-lg overflow-hidden"
+      style={{ border: "1px solid var(--cs-border)", background: "rgba(255,255,255,0.03)" }}
+    >
+      {(["es", "en"] as Locale[]).map((opt) => {
+        const active = opt === value;
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            className="px-3 py-1 text-xs font-semibold font-dm-sans transition-all duration-150"
+            style={{
+              background: active ? "var(--cs-accent)" : "transparent",
+              color: active ? "#fff" : "var(--cs-muted)",
+              border: "none",
+              cursor: "pointer",
+              minWidth: 36,
+            }}
+          >
+            {opt.toUpperCase()}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
+
+export default function RollupDashboard({ userId, locale: initialLocale, initialCurrency }: RollupDashboardProps) {
   const supabase = createClient();
-  const isEs = locale === "es";
+
+  const [lang, setLang] = useState<Locale>(initialLocale);
+  const isEs = lang === "es";
+
+  // Sync language from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem("cs-lang") as Locale | null;
+    if (saved && (saved === "es" || saved === "en")) setLang(saved);
+  }, []);
+
+  // Language change handler — persist to localStorage + Supabase profile
+  const handleLangChange = useCallback((newLang: Locale) => {
+    setLang(newLang);
+    localStorage.setItem("cs-lang", newLang);
+    supabase.from("profiles").update({ language: newLang }).eq("id", userId);
+  }, [supabase, userId]);
 
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -337,7 +386,8 @@ export default function RollupDashboard({ userId, locale, initialCurrency }: Rol
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <LangToggle value={lang} onChange={handleLangChange} />
           <Link
             href="/dashboard"
             className="px-3 py-1.5 rounded-lg text-xs font-medium font-dm-sans"
