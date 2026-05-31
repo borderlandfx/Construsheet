@@ -99,7 +99,7 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
 
   const handleImport = async (apu: APU) => {
     if (!effectiveSection) {
-      alert(isEs ? 'Selecciona o crea una sección primero.' : 'Select or create a section first.');
+      alert(isEs ? 'Selecciona o crea un capítulo primero.' : 'Select or create a chapter first.');
       return;
     }
     if (!projectId) {
@@ -208,10 +208,10 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
           </button>
         </div>
 
-        {/* Section selector */}
+        {/* Chapter selector */}
         <div className="px-5 py-3 shrink-0" style={{ borderBottom: "1px solid var(--cs-border)" }}>
           <label className="text-xs font-semibold font-dm-sans uppercase tracking-wider block mb-1.5" style={{ color: "var(--cs-muted)" }}>
-            {isEs ? "Insertar en sección:" : "Insert into section:"}
+            {isEs ? "Insertar en capítulo:" : "Insert into chapter:"}
           </label>
           {useNewSection ? (
             <div className="flex gap-2 items-center">
@@ -244,7 +244,7 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--cs-border)", color: "var(--cs-text)", cursor: "pointer" }}
             >
               {sections.map((s) => <option key={s} value={s}>{s}</option>)}
-              <option value="__new__">{isEs ? "+ Nueva sección..." : "+ New section..."}</option>
+              <option value="__new__">{isEs ? "+ Nuevo capítulo..." : "+ New chapter..."}</option>
             </select>
           )}
         </div>

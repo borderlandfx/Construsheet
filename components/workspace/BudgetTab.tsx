@@ -2803,13 +2803,16 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
     onSaved: () => void; onClose: () => void }
 ) {
   const supabase = createClient();
+  const lang = language;
   const [apuItems, setApuItems] = useState<ApuItem[]>([]);
   const [loading, setLoading]   = useState(true);
   const [query, setQuery]       = useState("");
   const { toast } = useToast();
-  const [section, setSection]   = useState(sections.length > 0 ? sections[0] : "__new__");
-  const [newSec, setNewSec]     = useState("");
+  const [chapter, setChapter]   = useState(sections.length > 0 ? sections[0] : "__new__");
+  const [newChapter, setNewChapter] = useState("");
   const [importing, setImporting] = useState<string | null>(null);
+  const [useApuCategory, setUseApuCategory] = useState(false);
+  const [hoveredApu, setHoveredApu] = useState<ApuItem | null>(null);
 
   useEffect(() => {
     supabase.from("apu_items").select("*")
@@ -2824,16 +2827,22 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const effectiveSec = section === "__new__" ? newSec.trim() : section.trim();
   const filtered = apuItems.filter((a) =>
     a.description?.toLowerCase().includes(query.toLowerCase()) ||
     a.code?.toLowerCase().includes(query.toLowerCase()) ||
     a.category?.toLowerCase().includes(query.toLowerCase())
   );
 
+  function getFinalChapter(apu: ApuItem): string | null {
+    if (useApuCategory && apu.category) return apu.category;
+    if (chapter === "__new__") return newChapter.trim() || null;
+    return chapter.trim() || null;
+  }
+
   async function handleImport(apu: ApuItem) {
-    if (!effectiveSec) {
-      toast(language === "es" ? "Selecciona o crea una sección primero" : "Select or create a section first", "error");
+    const finalChap = getFinalChapter(apu);
+    if (!finalChap) {
+      toast(lang === "es" ? "Por favor selecciona un capítulo" : "Please select a chapter", "error");
       return;
     }
     if (!projectId) {
@@ -2851,13 +2860,13 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
       .limit(1);
     let nextOrder = ((lastRow?.[0]?.sort_order ?? 0) as number) + 1;
 
-    // If new section, create chapter header row first
-    const isNewSection = section === "__new__";
-    if (isNewSection) {
+    // Check if chapter exists, create if not
+    const chapterIsNew = !sections.includes(finalChap);
+    if (chapterIsNew) {
       const { error: chErr } = await supabase.from("budget_rows").insert({
         project_id: projectId,
-        section: effectiveSec,
-        description: effectiveSec,
+        section: finalChap,
+        description: finalChap,
         is_chapter: true,
         code: null,
         quantity: 0,
@@ -2867,7 +2876,7 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
       }).select().single();
       if (chErr) {
         console.error("[IMPORT APU] Chapter insert error:", chErr);
-        toast(language === "es" ? `Error al crear sección: ${chErr.message}` : `Failed to create section: ${chErr.message}`, "error");
+        toast(lang === "es" ? `Error al crear capítulo: ${chErr.message}` : `Failed to create chapter: ${chErr.message}`, "error");
         setImporting(null);
         return;
       }
@@ -2875,7 +2884,7 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
     }
 
     const payload: BudgetRowInsert = {
-      project_id: projectId, apu_item_id: apu.id, section: effectiveSec,
+      project_id: projectId, apu_item_id: apu.id, section: finalChap,
       code: apu.code, description: apu.description, unit: apu.unit,
       quantity: 0, unit_price: apu.selling_price,
       original_quantity: 0,
@@ -2885,7 +2894,7 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
     setImporting(null);
     if (error) {
       console.error("[IMPORT APU] Insert error:", error);
-      toast(language === "es" ? `Error al importar: ${error.message}` : `Import failed: ${error.message}`, "error");
+      toast(lang === "es" ? `Error al importar: ${error.message}` : `Import failed: ${error.message}`, "error");
       return;
     }
     if (data) { onSaved(); onClose(); }
@@ -2895,49 +2904,163 @@ function ImportAPUModal({ projectId, language, sections, onSaved, onClose }:
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
       onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="w-full flex flex-col" style={{ maxWidth: 560, maxHeight: "85vh", background: CS.surface, border: `1px solid ${CS.border}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}>
+      <div className="w-full flex flex-col" style={{ maxWidth: 600, maxHeight: "85vh", background: CS.surface, border: `1px solid ${CS.border}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}>
+        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: `1px solid ${CS.border}` }}>
           <div className="flex items-center gap-2">
             <Import className="h-4 w-4" style={{ color: CS.accent }} />
-            <span className="font-syne font-bold text-base" style={{ color: CS.text }}>{language === "es" ? "Importar desde APU" : "Import from APU"}</span>
+            <span className="font-syne font-bold text-base" style={{ color: CS.text }}>
+              {lang === "es" ? "Importar desde APU" : "Import from APU"}
+            </span>
+            {!loading && apuItems.length > 0 && (
+              <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>({apuItems.length})</span>
+            )}
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}><X className="h-4 w-4" /></button>
         </div>
+
+        {/* Chapter selection */}
         <div className="px-5 py-3 shrink-0" style={{ borderBottom: `1px solid ${CS.border}` }}>
-          <label style={{ ...LBL, marginBottom: 6 }}>{language === "es" ? "Insertar en sección:" : "Insert into section:"}</label>
-          {section === "__new__" ? (
-            <div className="flex gap-2 items-center">
-              <input style={{ ...FIELD, flex: 1 }} value={newSec} onChange={(e) => setNewSec(e.target.value)} placeholder={language === "es" ? "ej. 01 · TRABAJOS PRELIMINARES" : "e.g. 01 · PRELIMINARY WORKS"} autoFocus />
-              <button onClick={() => { setSection(sections[0] ?? ""); setNewSec(""); }} style={{ background: "none", border: "none", cursor: "pointer", color: CS.accent, fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap" }}>← {language === "es" ? "volver" : "back"}</button>
-            </div>
-          ) : (
-            <select style={FIELD} value={section} onChange={(e) => setSection(e.target.value)}>
-              {sections.map((s) => <option key={s} value={s}>{s}</option>)}
-              <option value="__new__">{language === "es" ? "+ Nueva sección..." : "+ New section..."}</option>
-            </select>
+          {/* Use APU category checkbox */}
+          <div className="flex items-center gap-2 mb-2">
+            <input type="checkbox" id="useApuCat" checked={useApuCategory}
+              onChange={(e) => setUseApuCategory(e.target.checked)}
+              style={{ accentColor: CS.accent, cursor: "pointer" }} />
+            <label htmlFor="useApuCat" className="text-xs font-dm-sans" style={{ color: CS.text, cursor: "pointer" }}>
+              {lang === "es" ? "Usar clasificación original del APU como capítulo" : "Use original APU category as chapter"}
+            </label>
+          </div>
+          {useApuCategory && (
+            <p className="text-xs font-dm-sans mb-1" style={{ color: CS.muted }}>
+              {lang === "es"
+                ? "El APU se insertará en un capítulo con el nombre de su categoría."
+                : "The APU will be inserted into a chapter named after its category."}
+            </p>
+          )}
+
+          {/* Chapter dropdown — hidden when using APU category */}
+          {!useApuCategory && (
+            <>
+              <label style={{ ...LBL, marginBottom: 6 }}>
+                {lang === "es" ? "Insertar en capítulo:" : "Insert into chapter:"}
+              </label>
+              {chapter === "__new__" ? (
+                <div className="flex gap-2 items-center">
+                  <input style={{ ...FIELD, flex: 1 }} value={newChapter} onChange={(e) => setNewChapter(e.target.value)}
+                    placeholder={lang === "es" ? "ej. 01 · CIMENTACIÓN" : "e.g. 01 · FOUNDATION"} autoFocus />
+                  {sections.length > 0 && (
+                    <button onClick={() => { setChapter(sections[0]); setNewChapter(""); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: CS.accent, fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap" }}>
+                      ← {lang === "es" ? "volver" : "back"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <select style={FIELD} value={chapter} onChange={(e) => setChapter(e.target.value)}>
+                  {sections.map((s) => <option key={s} value={s}>{s}</option>)}
+                  <option value="__new__">{lang === "es" ? "+ Nuevo capítulo..." : "+ New chapter..."}</option>
+                </select>
+              )}
+            </>
           )}
         </div>
+
+        {/* Search */}
         <div className="flex items-center gap-2 px-4 py-2.5 shrink-0" style={{ borderBottom: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}>
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: CS.muted }} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={language === "es" ? "Buscar concepto o código..." : "Search..."}
+          <input value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder={lang === "es" ? "Buscar concepto, código o categoría..." : "Search description, code or category..."}
             className="flex-1 bg-transparent text-sm font-dm-sans outline-none" style={{ color: CS.text }} />
+          {query && <button onClick={() => setQuery("")} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}><X className="h-3 w-3" /></button>}
         </div>
+
+        {/* APU list */}
         <div className="flex-1 overflow-y-auto">
-          {loading ? <div className="flex items-center justify-center py-12"><Loader2 className="h-5 w-5 animate-spin" style={{ color: CS.muted }} /></div>
-            : filtered.length === 0 ? <p className="text-center py-10 text-sm font-dm-sans" style={{ color: CS.muted }}>{language === "es" ? "Sin resultados." : "No results."}</p>
-            : <table className="w-full text-sm font-dm-sans"><thead className="sticky top-0" style={{ background: CS.surface }}><tr style={{ borderBottom: `1px solid ${CS.border}` }}>
-              <th className="text-left px-4 py-2 text-xs font-semibold" style={{ color: CS.muted, width: 70 }}>Código</th>
-              <th className="text-left px-2 py-2 text-xs font-semibold" style={{ color: CS.muted }}>Descripción</th>
-              <th className="text-right px-4 py-2 text-xs font-semibold w-28" style={{ color: CS.muted }}>P. Venta</th>
-            </tr></thead><tbody>{filtered.map((apu) => (
-              <tr key={apu.id} className="group cursor-pointer" style={{ borderBottom: `1px solid ${CS.border}` }} onClick={() => handleImport(apu)}>
-                <td className="px-4 py-2.5"><code className="text-xs font-mono" style={{ color: CS.accent }}>{apu.code}</code></td>
-                <td className="px-2 py-2.5" style={{ color: CS.text }}>{importing === apu.id ? <span className="flex items-center gap-1.5" style={{ color: CS.accent }}><Loader2 className="h-3 w-3 animate-spin" />{language === "es" ? "Insertando..." : "Inserting..."}</span> : apu.description}</td>
-                <td className="px-4 py-2.5 text-right font-semibold" style={{ color: CS.accent }}>{apu.selling_price.toLocaleString("es-MX", { minimumFractionDigits: 2 })}</td>
-              </tr>))}</tbody></table>}
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-2">
+              <Loader2 className="h-5 w-5 animate-spin" style={{ color: CS.muted }} />
+              <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
+                {lang === "es" ? "Cargando APUs..." : "Loading APUs..."}
+              </span>
+            </div>
+          ) : apuItems.length === 0 ? (
+            <p className="text-center py-10 text-sm font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es" ? "No hay APUs disponibles. Crea uno en la pestaña APU primero." : "No APUs available. Create one in the APU tab first."}
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="text-center py-10 text-sm font-dm-sans" style={{ color: CS.muted }}>
+              {lang === "es" ? `Sin resultados para "${query}"` : `No results for "${query}"`}
+            </p>
+          ) : (
+            <table className="w-full text-sm font-dm-sans">
+              <thead className="sticky top-0" style={{ background: CS.surface }}>
+                <tr style={{ borderBottom: `1px solid ${CS.border}` }}>
+                  <th className="text-left px-4 py-2 text-xs font-semibold" style={{ color: CS.muted, width: 70 }}>
+                    {lang === "es" ? "Código" : "Code"}
+                  </th>
+                  <th className="text-left px-2 py-2 text-xs font-semibold" style={{ color: CS.muted }}>
+                    {lang === "es" ? "Descripción" : "Description"}
+                  </th>
+                  <th className="text-right px-4 py-2 text-xs font-semibold w-28" style={{ color: CS.muted }}>
+                    {lang === "es" ? "P. Venta" : "Price"}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((apu) => {
+                  const targetChap = getFinalChapter(apu);
+                  const noCategory = useApuCategory && !apu.category;
+                  return (
+                    <tr key={apu.id} className="group cursor-pointer"
+                      style={{
+                        borderBottom: `1px solid ${CS.border}`,
+                        opacity: noCategory ? 0.5 : 1,
+                        background: hoveredApu?.id === apu.id ? "rgba(249,115,22,0.04)" : undefined,
+                      }}
+                      onClick={() => !noCategory && handleImport(apu)}
+                      onMouseEnter={() => setHoveredApu(apu)}
+                      onMouseLeave={() => setHoveredApu(null)}
+                      title={noCategory ? (lang === "es" ? "Este APU no tiene categoría" : "This APU has no category") : undefined}>
+                      <td className="px-4 py-2.5">
+                        <code className="text-xs font-mono" style={{ color: CS.accent }}>{apu.code}</code>
+                      </td>
+                      <td className="px-2 py-2.5">
+                        {importing === apu.id ? (
+                          <span className="flex items-center gap-1.5" style={{ color: CS.accent }}>
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            {lang === "es" ? "Insertando..." : "Inserting..."}
+                          </span>
+                        ) : (
+                          <div>
+                            <span style={{ color: CS.text }}>{apu.description}</span>
+                            {apu.category && (
+                              <span className="ml-2 text-[10px] font-semibold rounded-full px-1.5 py-px"
+                                style={{ background: "rgba(249,115,22,0.1)", color: CS.accent }}>
+                                {apu.category}
+                              </span>
+                            )}
+                            {useApuCategory && targetChap && (
+                              <div className="text-[10px] font-dm-sans mt-0.5" style={{ color: CS.muted }}>
+                                → {targetChap}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-semibold" style={{ color: CS.accent }}>
+                        {apu.selling_price?.toLocaleString("es-MX", { minimumFractionDigits: 2 }) ?? "0.00"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
+
+        {/* Footer */}
         <div className="px-4 py-2.5 text-xs font-dm-sans shrink-0" style={{ color: CS.muted, borderTop: `1px solid ${CS.border}`, background: "rgba(255,255,255,0.02)" }}>
-          {language === "es" ? "Haz clic en un APU para insertarlo. La cantidad quedará en 0." : "Click an APU to insert it. Quantity will be 0."}
+          {lang === "es" ? "Haz clic en un APU para insertarlo. La cantidad quedará en 0." : "Click an APU to insert it. Quantity will be 0."}
         </div>
       </div>
     </div>
