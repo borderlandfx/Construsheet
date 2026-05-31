@@ -7,6 +7,7 @@ import {
   Plus, Trash2, Loader2, X, Search, Import, BookOpen,
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
   FileText, ArrowDownToLine, TableProperties, ChevronRight, ChevronDown,
+  Clock,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -37,6 +38,7 @@ import type {
 import type { Locale } from "@/lib/utils/i18n";
 import { calcCostsDetailed, type EditorDraft } from "@/components/workspace/APUTab";
 import APULibraryModal from "@/components/workspace/APULibraryModal";
+import RowHistoryPanel from "@/components/workspace/RowHistoryPanel";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -1347,16 +1349,18 @@ interface SortableRowProps {
   isDimmed?: boolean;
   lang: Locale;
   fmt: (n: number) => string;
+  historyAge: "recent" | "old" | null;
   onSelect: () => void;
   onDelete: (id: string) => void;
   onDuplicate: (row: BudgetRow) => void;
   onCellSave: (id: string, field: EditableField, val: string) => void;
   onContextMenu: (e: React.MouseEvent, rowId: string) => void;
+  onHistory: (row: BudgetRow) => void;
 }
 
 function SortableBudgetRow({
-  row, globalRowNum, isSelected, isEven, isDimmed, lang, fmt,
-  onSelect, onDelete, onDuplicate, onCellSave, onContextMenu,
+  row, globalRowNum, isSelected, isEven, isDimmed, lang, fmt, historyAge,
+  onSelect, onDelete, onDuplicate, onCellSave, onContextMenu, onHistory,
 }: SortableRowProps) {
   const {
     attributes, listeners, setNodeRef,
@@ -1386,8 +1390,20 @@ function SortableBudgetRow({
     <tr ref={setNodeRef} style={style} className="group cursor-pointer"
       onClick={onSelect}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, row.id); }}>
-      {/* # with drag handle on hover */}
-      <td style={{ padding: cellPad, textAlign: "center", width: 40, fontSize: 12, color: "var(--cs-muted)" }}>
+      {/* # with drag handle on hover + history dot */}
+      <td style={{ padding: cellPad, textAlign: "center", width: 40, fontSize: 12, color: "var(--cs-muted)", position: "relative" }}>
+        {historyAge && (
+          <span
+            className="absolute"
+            style={{
+              top: 4, right: 2, width: 5, height: 5, borderRadius: "50%",
+              background: historyAge === "recent" ? "#f97316" : "#9ca3af",
+            }}
+            title={historyAge === "recent"
+              ? (lang === "es" ? "Modificado recientemente" : "Recently modified")
+              : (lang === "es" ? "Modificado" : "Modified")}
+          />
+        )}
         <span className="group-hover:hidden">{globalRowNum}</span>
         <button
           {...attributes}
@@ -1448,6 +1464,14 @@ function SortableBudgetRow({
           onSave={(v) => onCellSave(row.id, "assignee", v)} />
         {/* Hover action icons */}
         <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onHistory(row); }}
+            title={lang === "es" ? "Historial" : "History"}
+            className="flex items-center justify-center rounded"
+            style={{ width: 24, height: 24, background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}
+            onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.color = "var(--cs-accent)")}
+            onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.color = "var(--cs-muted)")}>
+            <Clock className="h-3 w-3" />
+          </button>
           <button type="button" onClick={(e) => { e.stopPropagation(); onDuplicate(row); }}
             title={lang === "es" ? "Duplicar" : "Duplicate"}
             className="flex items-center justify-center rounded"
@@ -1545,6 +1569,76 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   const [showPaste, setShowPaste]     = useState(false);
   const [showAPULibrary, setShowAPULibrary] = useState(false);
   const [addPrefill, setAddPrefill]   = useState<{ name: string; unit: string; unit_price: number } | null>(null);
+
+  // ── History panel state ──────────────────────────────────────────────────
+  const [historyRow, setHistoryRow] = useState<BudgetRow | null>(null);
+  const [historyTimestamps, setHistoryTimestamps] = useState<Map<string, string>>(new Map());
+
+  // Fetch latest change timestamps per row (for modified-dot indicators)
+  useEffect(() => {
+    supabase
+      .from("budget_row_history")
+      .select("budget_row_id, changed_at")
+      .eq("project_id", projectId)
+      .order("changed_at", { ascending: false })
+      .then(({ data }) => {
+        if (!data) return;
+        const map = new Map<string, string>();
+        for (const entry of data as { budget_row_id: string; changed_at: string }[]) {
+          if (!map.has(entry.budget_row_id)) {
+            map.set(entry.budget_row_id, entry.changed_at);
+          }
+        }
+        setHistoryTimestamps(map);
+      });
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Track a change in history
+  const trackChange = useCallback(async (
+    rowId: string, field: string, oldValue: string, newValue: string,
+  ) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from("budget_row_history").insert({
+      budget_row_id: rowId,
+      project_id: projectId,
+      user_id: user?.id,
+      user_name: user?.email?.split("@")[0] || "Usuario",
+      field_changed: field,
+      old_value: oldValue,
+      new_value: newValue,
+    });
+    // Update local timestamp map
+    setHistoryTimestamps((prev) => {
+      const next = new Map(prev);
+      next.set(rowId, new Date().toISOString());
+      return next;
+    });
+  }, [supabase, projectId]);
+
+  // Get history age for a row
+  const getHistoryAge = useCallback((rowId: string): "recent" | "old" | null => {
+    const ts = historyTimestamps.get(rowId);
+    if (!ts) return null;
+    const hoursAgo = (Date.now() - new Date(ts).getTime()) / 3_600_000;
+    return hoursAgo <= 24 ? "recent" : "old";
+  }, [historyTimestamps]);
+
+  // Handle restore from history panel
+  const handleHistoryRestore = useCallback((field: string, value: string) => {
+    if (!historyRow) return;
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== historyRow.id) return r;
+      const next = { ...r };
+      if (field === "quantity") { next.quantity = parseFloat(value) || 0; next.total = next.quantity * next.unit_price; }
+      else if (field === "unit_price") { next.unit_price = parseFloat(value) || 0; next.total = next.quantity * next.unit_price; }
+      else if (field === "status") next.status = value as "pending" | "in-review" | "approved";
+      else if (field === "description") next.description = value;
+      else if (field === "assignee") next.assignee = value || null;
+      else if (field === "code") next.code = value || null;
+      else if (field === "unit") next.unit = value || null;
+      return next;
+    }));
+  }, [historyRow, setRows]);
 
   function refetchBudgetRows() {
     supabase.from("budget_rows").select("*").eq("project_id", projectId).order("sort_order")
@@ -1764,6 +1858,28 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   // ── Inline cell save ──────────────────────────────────────────────────────
   const handleCellSave = useCallback(
     async (rowId: string, field: EditableField, rawVal: string) => {
+      // Capture old value for history tracking
+      const currentRow = rows.find((r) => r.id === rowId);
+      let oldValue = "";
+      if (currentRow) {
+        if (field === "code") oldValue = currentRow.code ?? "";
+        else if (field === "description") oldValue = currentRow.description;
+        else if (field === "unit") oldValue = currentRow.unit ?? "";
+        else if (field === "quantity") oldValue = String(currentRow.quantity);
+        else if (field === "unit_price") oldValue = String(currentRow.unit_price);
+        else if (field === "status") oldValue = currentRow.status;
+        else if (field === "assignee") oldValue = currentRow.assignee ?? "";
+      }
+
+      // Compute effective new value for comparison
+      let effectiveNew = rawVal;
+      if (field === "quantity" || field === "unit_price") effectiveNew = String(parseFloat(rawVal) || 0);
+      else if (field === "code" || field === "unit" || field === "assignee") effectiveNew = rawVal.trim();
+      else if (field === "description") effectiveNew = rawVal.trim();
+
+      // Skip if value didn't actually change
+      if (oldValue === effectiveNew) return;
+
       // Optimistic update
       const prevRows = rows;
       setRows((prev) => prev.map((r) => {
@@ -1804,13 +1920,16 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         return;
       }
 
+      // Track the change in history (fire-and-forget)
+      trackChange(rowId, field, oldValue, effectiveNew);
+
       // Sync status to gantt
       if (field === "status") {
         const row = rows.find((r) => r.id === rowId);
         if (row) syncGanttStatus(supabase, projectId, { description: row.description, section: row.section }, rawVal);
       }
     },
-    [supabase, projectId, rows, lang, toast, setRows]
+    [supabase, projectId, rows, lang, toast, setRows, trackChange]
   );
 
   // ── Row delete ────────────────────────────────────────────────────────────
@@ -2397,11 +2516,13 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
                                   isDimmed={filteredIds !== null && !filteredIds.has(row.id)}
                                   lang={lang}
                                   fmt={fmt}
+                                  historyAge={getHistoryAge(row.id)}
                                   onSelect={() => setSelectedRowId(row.id === selectedRowId ? null : row.id)}
                                   onDelete={handleDelete}
                                   onDuplicate={handleDuplicateRow}
                                   onCellSave={handleCellSave}
                                   onContextMenu={handleRowCtxMenu}
+                                  onHistory={setHistoryRow}
                                 />
                               );
                             })}
@@ -2632,6 +2753,18 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
             setShowAdd(true);
           }}
           onClose={() => setShowLibrary(false)}
+        />
+      )}
+
+      {/* ── Row history panel ──────────────────────────────── */}
+      {historyRow && (
+        <RowHistoryPanel
+          rowId={historyRow.id}
+          rowDescription={historyRow.description}
+          projectId={projectId}
+          lang={lang}
+          onClose={() => setHistoryRow(null)}
+          onRestore={handleHistoryRestore}
         />
       )}
     </div>

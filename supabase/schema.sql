@@ -323,3 +323,34 @@ CREATE POLICY "takeoff_items_delete_own" ON takeoff_items
   FOR DELETE USING (
     project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
   );
+
+-- ---------------------------------------------------------------------------
+-- 7. BUDGET_ROW_HISTORY  (Version History / Change Log)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS budget_row_history (
+  id             UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  budget_row_id  UUID        NOT NULL REFERENCES budget_rows(id) ON DELETE CASCADE,
+  project_id     UUID        NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  user_id        UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_name      TEXT,
+  field_changed  TEXT        NOT NULL,
+  old_value      TEXT,
+  new_value      TEXT,
+  changed_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_budget_row_history_row     ON budget_row_history(budget_row_id);
+CREATE INDEX IF NOT EXISTS idx_budget_row_history_project ON budget_row_history(project_id);
+CREATE INDEX IF NOT EXISTS idx_budget_row_history_time    ON budget_row_history(changed_at DESC);
+
+ALTER TABLE budget_row_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "budget_row_history_select_own" ON budget_row_history
+  FOR SELECT USING (
+    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
+  );
+
+CREATE POLICY "budget_row_history_insert_own" ON budget_row_history
+  FOR INSERT WITH CHECK (
+    project_id IN (SELECT id FROM projects WHERE user_id = auth.uid())
+  );

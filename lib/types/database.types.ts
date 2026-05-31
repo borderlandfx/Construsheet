@@ -396,6 +396,56 @@ export interface Database {
           }
         ];
       };
+
+      // --- budget_row_history ------------------------------------------------
+      budget_row_history: {
+        Row: {
+          id: string;
+          budget_row_id: string;
+          project_id: string;
+          user_id: string | null;
+          user_name: string | null;
+          field_changed: string;
+          old_value: string | null;
+          new_value: string | null;
+          changed_at: string;
+        };
+        Insert: {
+          id?: string;
+          budget_row_id: string;
+          project_id: string;
+          user_id?: string | null;
+          user_name?: string | null;
+          field_changed: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          changed_at?: string;
+        };
+        Update: {
+          id?: string;
+          budget_row_id?: string;
+          project_id?: string;
+          user_id?: string | null;
+          user_name?: string | null;
+          field_changed?: string;
+          old_value?: string | null;
+          new_value?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "budget_row_history_budget_row_id_fkey";
+            columns: ["budget_row_id"];
+            referencedRelation: "budget_rows";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "budget_row_history_project_id_fkey";
+            columns: ["project_id"];
+            referencedRelation: "projects";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
 
     Views: Record<string, never>;

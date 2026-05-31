@@ -41,8 +41,9 @@ import type { BudgetRow } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 import ExecutiveSummary from "./ExecutiveSummary";
 import VarianceReport from "./VarianceReport";
+import ProjectHistory from "./ProjectHistory";
 
-type ReportView = "dashboard" | "executive" | "variance";
+type ReportView = "dashboard" | "executive" | "variance" | "history";
 
 // ─── Status colors ───────────────────────────────────────────────────────────
 
@@ -462,6 +463,9 @@ export default function ReportsTab() {
         <TBtn active={reportView === "variance"} onClick={() => setReportView("variance")}>
           <GitCompareArrows className="h-3.5 w-3.5" /> {lang === "es" ? "Varianza" : "Variance"}
         </TBtn>
+        <TBtn active={reportView === "history"} onClick={() => setReportView("history")}>
+          <Clock className="h-3.5 w-3.5" /> {lang === "es" ? "Historial" : "History"}
+        </TBtn>
       </ToolbarGroup>
       <ToolbarSep />
       {reportView === "dashboard" && (
@@ -494,6 +498,8 @@ export default function ReportsTab() {
       <ExecutiveSummary />
     ) : reportView === "variance" ? (
       <VarianceReport />
+    ) : reportView === "history" ? (
+      <ProjectHistory />
     ) : (
     <div className="flex flex-col gap-6">
       {/* ── Top row: 4 Metric Cards ─────────────────────────────── */}
