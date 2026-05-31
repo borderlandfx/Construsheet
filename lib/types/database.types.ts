@@ -354,6 +354,7 @@ export interface Database {
           progress_pct: number;
           parent_task_id: string | null;
           budget_section: string | null;
+          budget_row_id: string | null;
           is_chapter: boolean;
 
           sort_order: number;
@@ -370,6 +371,7 @@ export interface Database {
           progress_pct?: number;
           parent_task_id?: string | null;
           budget_section?: string | null;
+          budget_row_id?: string | null;
           is_chapter?: boolean;
 
           sort_order?: number;
@@ -386,6 +388,7 @@ export interface Database {
           progress_pct?: number;
           parent_task_id?: string | null;
           budget_section?: string | null;
+          budget_row_id?: string | null;
           is_chapter?: boolean;
 
           sort_order?: number;

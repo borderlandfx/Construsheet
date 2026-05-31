@@ -1945,6 +1945,8 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     setRows((prev) => prev.filter((r) => r.id !== id));
     if (selectedRowId === id) setSelectedRowId(null);
     await supabase.from("budget_rows").delete().eq("id", id);
+    // Safety net: also delete linked gantt task (for older records without ON DELETE CASCADE)
+    await supabase.from("gantt_tasks").delete().eq("project_id", projectId).eq("budget_row_id", id);
   }
 
   async function handleDuplicateRow(source: BudgetRow) {
@@ -2055,6 +2057,11 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     setRows((prev) => prev.filter((r) => r.section !== section));
     if (selectedRowId && idsToDelete.includes(selectedRowId)) setSelectedRowId(null);
     await supabase.from("budget_rows").delete().in("id", idsToDelete);
+    // Delete linked gantt tasks: individual rows + chapter task
+    await supabase.from("gantt_tasks").delete().eq("project_id", projectId).eq("budget_section", section).eq("is_chapter", true);
+    if (idsToDelete.length > 0) {
+      await supabase.from("gantt_tasks").delete().eq("project_id", projectId).in("budget_row_id", idsToDelete);
+    }
     setDeleteConfirm(null);
   }
 

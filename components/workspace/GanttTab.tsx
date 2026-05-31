@@ -597,6 +597,19 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
     return () => { supabase.removeChannel(channel); };
   }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Listen for budget_rows DELETE to remove linked gantt tasks ─────────────
+  useEffect(() => {
+    const ch = supabase.channel(`budget-delete:${projectId}`)
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "budget_rows", filter: `project_id=eq.${projectId}` },
+        (payload) => {
+          const deletedRowId = (payload.old as { id: string }).id;
+          setTasks((prev) => prev.filter((t) => t.budget_row_id !== deletedRowId));
+        }
+      ).subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { onCountChange?.(tasks.length); }, [tasks.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
