@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  HardHat, Home, Building2, Settings, LogOut, Menu, X,
+  HardHat, Home, Building2, Settings, LogOut, Menu, X, LayoutDashboard,
 } from "lucide-react";
 import type { Locale } from "@/lib/utils/i18n";
 
@@ -86,6 +86,13 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
           icon={Home}
           label={isEs ? "Inicio" : "Dashboard"}
           active={pathname === "/dashboard"}
+          onClick={() => setMobileOpen(false)}
+        />
+        <NavItem
+          href="/rollup"
+          icon={LayoutDashboard}
+          label={isEs ? "Vista General" : "Overview"}
+          active={pathname === "/rollup"}
           onClick={() => setMobileOpen(false)}
         />
       </nav>
