@@ -12,6 +12,7 @@ interface APU {
   unit: string;
   selling_price: number;
   category: string | null;
+  is_library: boolean | null;
 }
 
 interface Props {
@@ -29,6 +30,7 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
   const [apus, setApus] = useState<APU[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [importing, setImporting] = useState<string | null>(null);
   const [sections, setSections] = useState<string[]>([]);
   const [selectedSection, setSelectedSection] = useState<string>('');
@@ -37,41 +39,37 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
 
   const isEs = language === "es";
 
-  // Fetch global library APUs + project-specific APUs
+  // Fetch all APUs accessible to this user: current project + global library
   useEffect(() => {
     if (!userId) return;
     async function load() {
       setLoading(true);
-      const [libraryRes, projectRes, secRes] = await Promise.all([
-        // Global catalog: all library APUs owned by this user
+      setFetchError(null);
+      const [apuRes, secRes] = await Promise.all([
         supabase
           .from('apu_items')
-          .select('id, code, description, unit, selling_price, category')
-          .eq('is_library', true)
-          .eq('user_id', userId)
-          .order('description', { ascending: true }),
-        // Project-specific APUs (non-library) for the current project
-        supabase
-          .from('apu_items')
-          .select('id, code, description, unit, selling_price, category')
-          .eq('project_id', projectId)
-          .eq('is_library', false)
-          .order('description', { ascending: true }),
+          .select('id, code, description, unit, selling_price, category, is_library')
+          .or(`project_id.eq.${projectId},and(is_library.eq.true,user_id.eq.${userId})`)
+          .order('code', { ascending: true }),
         supabase
           .from('budget_rows')
           .select('section')
           .eq('project_id', projectId)
           .eq('is_chapter', true),
       ]);
-      // Merge and deduplicate by id
-      const libraryApus = (libraryRes.data as APU[]) || [];
-      const projectApus = (projectRes.data as APU[]) || [];
-      const seen = new Set<string>();
-      const merged: APU[] = [];
-      for (const apu of [...libraryApus, ...projectApus]) {
-        if (!seen.has(apu.id)) { seen.add(apu.id); merged.push(apu); }
+      if (apuRes.error) {
+        console.error('[IMPORT MODAL] Fetch error:', apuRes.error);
+        setFetchError(apuRes.error.message);
+        setApus([]);
+      } else {
+        // Deduplicate by id (an APU in the current project that's also library)
+        const seen = new Set<string>();
+        const unique: APU[] = [];
+        for (const apu of (apuRes.data as APU[]) || []) {
+          if (!seen.has(apu.id)) { seen.add(apu.id); unique.push(apu); }
+        }
+        setApus(unique);
       }
-      setApus(merged);
       const uniqueSections = Array.from(new Set(
         (secRes.data ?? []).map((r: { section: string }) => r.section).filter(Boolean)
       )) as string[];
@@ -83,9 +81,19 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
   }, [userId, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = apus.filter(a =>
-    a.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    a.code?.toLowerCase().includes(searchTerm.toLowerCase())
+    a.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    a.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    a.category?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Group by category
+  const grouped = new Map<string, APU[]>();
+  for (const apu of filtered) {
+    const cat = apu.category || (isEs ? "Sin categoría" : "Uncategorized");
+    if (!grouped.has(cat)) grouped.set(cat, []);
+    grouped.get(cat)!.push(apu);
+  }
+  const sortedCategories = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
 
   const effectiveSection = useNewSection ? newSection.trim() : selectedSection;
 
@@ -142,9 +150,9 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
         description: apu.description,
         code: apu.code,
         unit: apu.unit,
-        quantity: 1,
+        quantity: 0,
         unit_price: apu.selling_price || 0,
-        original_quantity: 1,
+        original_quantity: 0,
         sort_order: nextSortOrder,
         status: 'pending',
         is_chapter: false,
@@ -174,7 +182,7 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
       <div
         className="w-full flex flex-col"
         style={{
-          maxWidth: 600,
+          maxWidth: 640,
           maxHeight: "85vh",
           background: "var(--cs-surface)",
           border: "1px solid var(--cs-border)",
@@ -185,9 +193,16 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: "1px solid var(--cs-border)" }}>
-          <span className="font-syne font-bold text-base" style={{ color: "var(--cs-text)" }}>
-            {isEs ? "Biblioteca de APUs" : "APU Library"}
-          </span>
+          <div>
+            <span className="font-syne font-bold text-base" style={{ color: "var(--cs-text)" }}>
+              {isEs ? "Importar desde APU" : "Import from APU"}
+            </span>
+            {!loading && apus.length > 0 && (
+              <span className="ml-2 text-xs font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                ({apus.length} {isEs ? "disponibles" : "available"})
+              </span>
+            )}
+          </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}>
             <X className="h-4 w-4" />
           </button>
@@ -239,63 +254,107 @@ export default function APULibraryModal({ isOpen, onClose, projectId, budgetId, 
           <Search className="h-3.5 w-3.5 shrink-0" style={{ color: "var(--cs-muted)" }} />
           <input
             type="text"
-            placeholder={isEs ? "Buscar APU..." : "Search APU..."}
+            placeholder={isEs ? "Buscar por descripción, código o categoría..." : "Search by description, code or category..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-1 bg-transparent text-sm font-dm-sans outline-none"
             style={{ color: "var(--cs-text)" }}
           />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--cs-muted)" }}>
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
         {/* APU list */}
         <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-16">
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
               <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--cs-muted)" }} />
+              <span className="text-xs font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                {isEs ? "Cargando APUs..." : "Loading APUs..."}
+              </span>
+            </div>
+          ) : fetchError ? (
+            <div className="text-center py-12 px-5">
+              <p className="text-sm font-dm-sans font-medium" style={{ color: "#ef4444" }}>
+                {isEs ? "Error al cargar APUs" : "Error loading APUs"}
+              </p>
+              <p className="text-xs font-dm-sans mt-1" style={{ color: "var(--cs-muted)" }}>{fetchError}</p>
+            </div>
+          ) : apus.length === 0 ? (
+            <div className="text-center py-12 px-5">
+              <p className="text-sm font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                {isEs
+                  ? "No hay APUs en este proyecto. Crea uno primero en la pestaña APU."
+                  : "No APUs in this project. Create one first in the APU tab."}
+              </p>
             </div>
           ) : filtered.length === 0 ? (
             <p className="text-center py-12 text-sm font-dm-sans" style={{ color: "var(--cs-muted)" }}>
-              {isEs ? "No se encontraron APUs en tu biblioteca" : "No APUs found in your library"}
+              {isEs ? `Sin resultados para "${searchTerm}"` : `No results for "${searchTerm}"`}
             </p>
           ) : (
             <div className="flex flex-col">
-              {filtered.map(apu => (
-                <button
-                  key={apu.id}
-                  type="button"
-                  onClick={() => handleImport(apu)}
-                  disabled={importing === apu.id}
-                  className="flex items-center justify-between px-5 py-3 text-left w-full"
-                  style={{
-                    borderBottom: "1px solid var(--cs-border)",
-                    background: "transparent",
-                    border: "none",
-                    borderBlockEnd: "1px solid var(--cs-border)",
-                    cursor: importing === apu.id ? "wait" : "pointer",
-                    opacity: importing === apu.id ? 0.6 : 1,
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.04)"; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
-                >
-                  <div>
-                    <div className="font-dm-sans text-sm font-medium" style={{ color: "var(--cs-text)" }}>
-                      {importing === apu.id ? (
-                        <span className="flex items-center gap-1.5" style={{ color: "var(--cs-accent)" }}>
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          {isEs ? "Insertando..." : "Inserting..."}
-                        </span>
-                      ) : (
-                        apu.description
-                      )}
-                    </div>
-                    <div className="font-dm-sans text-xs mt-0.5" style={{ color: "var(--cs-muted)" }}>
-                      <code style={{ color: "var(--cs-accent)" }}>{apu.code}</code> · {apu.unit}
-                    </div>
+              {sortedCategories.map(cat => (
+                <div key={cat}>
+                  {/* Category header */}
+                  <div className="px-5 py-1.5 sticky top-0" style={{ background: "var(--cs-surface)", borderBottom: "1px solid var(--cs-border)" }}>
+                    <span className="text-[10px] font-dm-sans font-bold uppercase tracking-wider" style={{ color: "var(--cs-muted)" }}>
+                      {cat}
+                    </span>
+                    <span className="ml-1.5 text-[10px] font-dm-sans" style={{ color: "var(--cs-muted)" }}>
+                      ({grouped.get(cat)!.length})
+                    </span>
                   </div>
-                  <div className="font-dm-sans text-sm font-semibold shrink-0 ml-4" style={{ color: "var(--cs-accent)" }}>
-                    ${apu.selling_price?.toLocaleString("es-MX", { minimumFractionDigits: 2 })}
-                  </div>
-                </button>
+                  {grouped.get(cat)!.map(apu => (
+                    <button
+                      key={apu.id}
+                      type="button"
+                      onClick={() => handleImport(apu)}
+                      disabled={importing === apu.id}
+                      className="flex items-center justify-between px-5 py-2.5 text-left w-full"
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        borderBottom: "1px solid var(--cs-border)",
+                        cursor: importing === apu.id ? "wait" : "pointer",
+                        opacity: importing === apu.id ? 0.6 : 1,
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.04)"; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; }}
+                    >
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs font-bold shrink-0" style={{ color: "var(--cs-accent)" }}>{apu.code}</code>
+                          <span className="font-dm-sans text-sm font-medium truncate" style={{ color: "var(--cs-text)" }}>
+                            {importing === apu.id ? (
+                              <span className="flex items-center gap-1.5" style={{ color: "var(--cs-accent)" }}>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                {isEs ? "Insertando..." : "Inserting..."}
+                              </span>
+                            ) : (
+                              apu.description
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="font-dm-sans text-xs" style={{ color: "var(--cs-muted)" }}>{apu.unit}</span>
+                          {apu.is_library && (
+                            <span className="text-[9px] font-dm-sans font-semibold rounded-full px-1.5 py-px"
+                              style={{ background: "rgba(249,115,22,0.1)", color: "var(--cs-accent)", border: "1px solid rgba(249,115,22,0.2)" }}>
+                              {isEs ? "Biblioteca" : "Library"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="font-dm-sans text-sm font-semibold shrink-0 ml-4" style={{ color: "var(--cs-accent)" }}>
+                        ${apu.selling_price?.toLocaleString("es-MX", { minimumFractionDigits: 2 }) ?? "0.00"}
+                      </div>
+                    </button>
+                  ))}
+                </div>
               ))}
             </div>
           )}
