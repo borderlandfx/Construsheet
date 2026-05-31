@@ -34,6 +34,11 @@ CREATE TABLE IF NOT EXISTS projects (
 -- Migration helpers (safe to run on existing databases)
 ALTER TABLE profiles  ADD COLUMN IF NOT EXISTS default_indirect_costs JSONB;
 ALTER TABLE projects  ADD COLUMN IF NOT EXISTS project_settings       JSONB DEFAULT '{}'::jsonb;
+
+-- Migration: subscription/plan columns on profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free' CHECK (plan IN ('free', 'pro'));
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
 -- Drop and re-add check constraint to allow COP (run only if constraint exists)
 -- ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_currency_pref_check;
 -- ALTER TABLE profiles ADD CONSTRAINT profiles_currency_pref_check CHECK (currency_pref IN ('USD', 'MXN', 'COP'));

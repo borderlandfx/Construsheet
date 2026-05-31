@@ -5,8 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  HardHat, Home, Building2, Settings, LogOut, Menu, X, LayoutDashboard,
+  HardHat, Home, Building2, Settings, LogOut, Menu, X, LayoutDashboard, Crown,
 } from "lucide-react";
+import { usePlan } from "@/lib/hooks/usePlan";
 import type { Locale } from "@/lib/utils/i18n";
 
 interface SidebarProps {
@@ -27,6 +28,7 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
   const router = useRouter();
   const supabase = createClient();
   const isEs = locale === "es";
+  const { isPro } = usePlan(userId);
 
   const [projects, setProjects] = useState<ProjectStub[]>([]);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -194,11 +196,30 @@ export default function Sidebar({ userId, locale, fullName, userEmail }: Sidebar
             {displayInitial}
           </span>
           <div className="flex flex-col min-w-0">
-            <span
-              className="font-dm-sans truncate"
-              style={{ fontSize: 12, fontWeight: 500, color: "var(--cs-text)" }}
-            >
-              {displayName}
+            <span className="flex items-center gap-1.5">
+              <span
+                className="font-dm-sans truncate"
+                style={{ fontSize: 12, fontWeight: 500, color: "var(--cs-text)" }}
+              >
+                {displayName}
+              </span>
+              {isPro ? (
+                <span
+                  className="inline-flex items-center gap-0.5 rounded px-1.5 py-px text-[9px] font-bold font-dm-sans shrink-0"
+                  style={{ background: "rgba(249,115,22,0.15)", color: "#f97316" }}
+                >
+                  <Crown className="h-2.5 w-2.5" /> PRO
+                </span>
+              ) : (
+                <Link
+                  href="/pricing"
+                  onClick={() => setMobileOpen(false)}
+                  className="inline-flex items-center rounded px-1.5 py-px text-[9px] font-bold font-dm-sans shrink-0"
+                  style={{ background: "rgba(255,255,255,0.06)", color: "var(--cs-muted)", textDecoration: "none" }}
+                >
+                  FREE
+                </Link>
+              )}
             </span>
             <span
               className="font-dm-sans truncate"

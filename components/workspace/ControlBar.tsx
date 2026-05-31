@@ -6,6 +6,8 @@ import { useWorkspace } from "@/lib/context/WorkspaceContext";
 import { t } from "@/lib/utils/i18n";
 import type { Currency } from "@/lib/utils/currency";
 import type { Locale } from "@/lib/utils/i18n";
+import { usePlan } from "@/lib/hooks/usePlan";
+import UpgradePrompt from "@/components/ui/UpgradePrompt";
 
 interface PillToggleProps<T extends string> {
   options: { value: T; label: string }[];
@@ -69,10 +71,12 @@ interface ControlBarProps {
 }
 
 export default function ControlBar({ userEmail: _userEmail, userInitial }: ControlBarProps) {
-  const { currency, unitSys, language, setCurrency, setUnitSys, setLanguage } =
+  const { currency, unitSys, language, setCurrency, setUnitSys, setLanguage, userId } =
     useWorkspace();
+  const { can } = usePlan(userId);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; description: string } | null>(null);
 
   useEffect(() => {
     if (!inviteOpen) return;
@@ -137,7 +141,18 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
 
         {/* Invite button — hidden on mobile */}
         <button
-          onClick={() => setInviteOpen(true)}
+          onClick={() => {
+            if (!can.inviteTeam()) {
+              setUpgradePrompt({
+                feature: language === "es" ? "Colaboración en equipo" : "Team collaboration",
+                description: language === "es"
+                  ? "Invita hasta 5 miembros a tu proyecto con el plan Pro."
+                  : "Invite up to 5 team members with the Pro plan.",
+              });
+              return;
+            }
+            setInviteOpen(true);
+          }}
           className="hidden md:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold font-dm-sans transition-colors"
           style={{
             border: "1px solid var(--cs-border)",
@@ -224,6 +239,15 @@ export default function ControlBar({ userEmail: _userEmail, userInitial }: Contr
             </p>
           </div>
         </div>
+      )}
+
+      {upgradePrompt && (
+        <UpgradePrompt
+          feature={upgradePrompt.feature}
+          description={upgradePrompt.description}
+          lang={language as Locale}
+          onClose={() => setUpgradePrompt(null)}
+        />
       )}
     </>
   );

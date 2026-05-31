@@ -75,6 +75,9 @@ export interface Database {
           language: "es" | "en";
           currency_pref: "USD" | "MXN";
           default_indirect_costs: ProjectIndirectCosts | null;
+          plan: "free" | "pro";
+          plan_expires_at: string | null;
+          stripe_customer_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -84,6 +87,9 @@ export interface Database {
           language?: "es" | "en";
           currency_pref?: "USD" | "MXN";
           default_indirect_costs?: ProjectIndirectCosts | null;
+          plan?: "free" | "pro";
+          plan_expires_at?: string | null;
+          stripe_customer_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -93,6 +99,9 @@ export interface Database {
           language?: "es" | "en";
           currency_pref?: "USD" | "MXN";
           default_indirect_costs?: ProjectIndirectCosts | null;
+          plan?: "free" | "pro";
+          plan_expires_at?: string | null;
+          stripe_customer_id?: string | null;
         };
         Relationships: [];
       };

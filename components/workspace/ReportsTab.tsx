@@ -42,6 +42,8 @@ import type { Locale } from "@/lib/utils/i18n";
 import ExecutiveSummary from "./ExecutiveSummary";
 import VarianceReport from "./VarianceReport";
 import ProjectHistory from "./ProjectHistory";
+import { usePlan } from "@/lib/hooks/usePlan";
+import UpgradePrompt from "@/components/ui/UpgradePrompt";
 
 type ReportView = "dashboard" | "executive" | "variance" | "history";
 
@@ -210,9 +212,11 @@ function DonutCenterLabel({ viewBox, value }: { viewBox?: { cx: number; cy: numb
 
 export default function ReportsTab() {
   const supabaseRef = useRef(createClient());
-  const { projectId, language, fmt, setActiveTab } = useWorkspace();
+  const { projectId, language, fmt, setActiveTab, userId } = useWorkspace();
   const { toast } = useToast();
   const lang = language as Locale;
+  const { can } = usePlan(userId);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; description: string } | null>(null);
 
   const [reportView, setReportView] = useState<ReportView>("dashboard");
   const [loading, setLoading] = useState(true);
@@ -457,13 +461,31 @@ export default function ReportsTab() {
         <TBtn active={reportView === "dashboard"} onClick={() => setReportView("dashboard")}>
           <BarChart3 className="h-3.5 w-3.5" /> Dashboard
         </TBtn>
-        <TBtn active={reportView === "executive"} onClick={() => setReportView("executive")}>
+        <TBtn active={reportView === "executive"} onClick={() => {
+          if (!can.executiveSummary()) {
+            setUpgradePrompt({ feature: lang === "es" ? "Resumen Ejecutivo" : "Executive Summary", description: lang === "es" ? "Genera un resumen ejecutivo profesional de tu proyecto." : "Generate a professional executive summary of your project." });
+            return;
+          }
+          setReportView("executive");
+        }}>
           <ClipboardList className="h-3.5 w-3.5" /> {lang === "es" ? "Resumen Ejecutivo" : "Executive Summary"}
         </TBtn>
-        <TBtn active={reportView === "variance"} onClick={() => setReportView("variance")}>
+        <TBtn active={reportView === "variance"} onClick={() => {
+          if (!can.varianceReport()) {
+            setUpgradePrompt({ feature: lang === "es" ? "Reporte de Varianza" : "Variance Report", description: lang === "es" ? "Compara presupuesto original vs actual por capítulo." : "Compare original vs current budget by chapter." });
+            return;
+          }
+          setReportView("variance");
+        }}>
           <GitCompareArrows className="h-3.5 w-3.5" /> {lang === "es" ? "Varianza" : "Variance"}
         </TBtn>
-        <TBtn active={reportView === "history"} onClick={() => setReportView("history")}>
+        <TBtn active={reportView === "history"} onClick={() => {
+          if (!can.versionHistory()) {
+            setUpgradePrompt({ feature: lang === "es" ? "Historial de Cambios" : "Version History", description: lang === "es" ? "Ve todos los cambios realizados en tu presupuesto." : "See all changes made to your budget." });
+            return;
+          }
+          setReportView("history");
+        }}>
           <Clock className="h-3.5 w-3.5" /> {lang === "es" ? "Historial" : "History"}
         </TBtn>
       </ToolbarGroup>
@@ -471,10 +493,16 @@ export default function ReportsTab() {
       {reportView === "dashboard" && (
         <>
           <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
-            <TBtn onClick={handleCSV} disabled={itemRows.length === 0}>
+            <TBtn onClick={() => {
+              if (!can.exportCSV()) { setUpgradePrompt({ feature: "CSV Export", description: lang === "es" ? "Exporta reportes como CSV." : "Export reports as CSV." }); return; }
+              handleCSV();
+            }} disabled={itemRows.length === 0}>
               <Download className="h-3.5 w-3.5" /> CSV
             </TBtn>
-            <TBtn onClick={handlePDF} disabled={pdfGenerating}>
+            <TBtn onClick={() => {
+              if (!can.exportPDF()) { setUpgradePrompt({ feature: "PDF Export", description: lang === "es" ? "Exporta reportes como PDF." : "Export reports as PDF." }); return; }
+              handlePDF();
+            }} disabled={pdfGenerating}>
               <FileText className="h-3.5 w-3.5" />{" "}
               {pdfGenerating ? (lang === "es" ? "Generando…" : "Generating…") : "PDF"}
             </TBtn>
@@ -786,6 +814,15 @@ export default function ReportsTab() {
         </div>
       </div>
     </div>
+    )}
+
+    {upgradePrompt && (
+      <UpgradePrompt
+        feature={upgradePrompt.feature}
+        description={upgradePrompt.description}
+        lang={lang}
+        onClose={() => setUpgradePrompt(null)}
+      />
     )}
     </>
   );

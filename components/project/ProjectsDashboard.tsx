@@ -8,6 +8,8 @@ import CreateProjectModal from "./CreateProjectModal";
 import { FolderOpen, Search, X } from "lucide-react";
 import type { Locale } from "@/lib/utils/i18n";
 import { t } from "@/lib/utils/i18n";
+import { usePlan } from "@/lib/hooks/usePlan";
+import UpgradePrompt from "@/components/ui/UpgradePrompt";
 
 type StatusFilter = "all" | "active" | "completed" | "archived";
 
@@ -83,6 +85,8 @@ export default function ProjectsDashboard({ userId, locale: initialLocale }: Pro
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [lang, setLang] = useState<Locale>(initialLocale);
+  const { can } = usePlan(userId);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; description: string } | null>(null);
 
   // Sync language from localStorage on mount
   useEffect(() => {
@@ -194,11 +198,24 @@ export default function ProjectsDashboard({ userId, locale: initialLocale }: Pro
         </div>
         <div className="flex items-center gap-3">
           <LangToggle value={lang} onChange={handleLangChange} />
-          <CreateProjectModal
-            userId={userId}
-            locale={lang}
-            onProjectCreated={handleProjectCreated}
-          />
+          <div onClickCapture={(e) => {
+            if (!can.createProject(projects.length)) {
+              e.stopPropagation();
+              e.preventDefault();
+              setUpgradePrompt({
+                feature: isEs ? "Proyectos ilimitados" : "Unlimited projects",
+                description: isEs
+                  ? "El plan gratuito incluye 1 proyecto. Actualiza a Pro para crear ilimitados."
+                  : "The free plan includes 1 project. Upgrade to Pro for unlimited.",
+              });
+            }
+          }}>
+            <CreateProjectModal
+              userId={userId}
+              locale={lang}
+              onProjectCreated={handleProjectCreated}
+            />
+          </div>
         </div>
       </div>
 
@@ -388,6 +405,15 @@ export default function ProjectsDashboard({ userId, locale: initialLocale }: Pro
             />
           ))}
         </div>
+      )}
+
+      {upgradePrompt && (
+        <UpgradePrompt
+          feature={upgradePrompt.feature}
+          description={upgradePrompt.description}
+          lang={lang}
+          onClose={() => setUpgradePrompt(null)}
+        />
       )}
     </>
   );

@@ -39,6 +39,8 @@ import type { Locale } from "@/lib/utils/i18n";
 import { calcCostsDetailed, type EditorDraft } from "@/components/workspace/APUTab";
 import APULibraryModal from "@/components/workspace/APULibraryModal";
 import RowHistoryPanel from "@/components/workspace/RowHistoryPanel";
+import { usePlan } from "@/lib/hooks/usePlan";
+import UpgradePrompt from "@/components/ui/UpgradePrompt";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -1530,6 +1532,8 @@ interface BudgetTabProps {
 export default function BudgetTab({ initialRows: _initialRows, apuItems: initialApuItems, onCountChange }: BudgetTabProps) {
   const { projectId, language, fmt, setActiveTab, userId, budgetRows: rows, setBudgetRows: setRows } = useWorkspace();
   const { toast } = useToast();
+  const { can } = usePlan(userId);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; description: string } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -2296,10 +2300,22 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     <>
     <ToolbarPortal>
       <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
-        <TBtn onClick={handleCSVExport} disabled={rows.length === 0}>
+        <TBtn onClick={() => {
+          if (!can.exportCSV()) {
+            setUpgradePrompt({ feature: "CSV Export", description: language === "es" ? "Exporta tu presupuesto como archivo CSV." : "Export your budget as a CSV file." });
+            return;
+          }
+          handleCSVExport();
+        }} disabled={rows.length === 0}>
           <Download className="h-3.5 w-3.5" /> CSV
         </TBtn>
-        <TBtn onClick={handlePrintReport} disabled={rows.length === 0}>
+        <TBtn onClick={() => {
+          if (!can.exportPDF()) {
+            setUpgradePrompt({ feature: language === "es" ? "Exportar PDF" : "PDF Export", description: language === "es" ? "Exporta tu presupuesto como PDF profesional." : "Export your budget as a professional PDF." });
+            return;
+          }
+          handlePrintReport();
+        }} disabled={rows.length === 0}>
           <FileText className="h-3.5 w-3.5" /> PDF
         </TBtn>
       </ToolbarGroup>
@@ -2753,6 +2769,16 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
             setShowAdd(true);
           }}
           onClose={() => setShowLibrary(false)}
+        />
+      )}
+
+      {/* ── Upgrade prompt ────────────────────────────────── */}
+      {upgradePrompt && (
+        <UpgradePrompt
+          feature={upgradePrompt.feature}
+          description={upgradePrompt.description}
+          lang={language as Locale}
+          onClose={() => setUpgradePrompt(null)}
         />
       )}
 

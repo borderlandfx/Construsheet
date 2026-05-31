@@ -23,6 +23,8 @@ import {
 } from "@/lib/data/materials-db";
 import type { Locale } from "@/lib/utils/i18n";
 import { useAIAPU } from "@/lib/hooks/useAIAPU";
+import { usePlan } from "@/lib/hooks/usePlan";
+import UpgradePrompt from "@/components/ui/UpgradePrompt";
 
 // ─── APU Chapter Categories ──────────────────────────────────────────────────
 
@@ -2021,9 +2023,11 @@ interface APUTabProps {
 export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
   const { projectId, language, currency, fmt, projectSettings, setActiveTab, userId } = useWorkspace();
   const { toast } = useToast();
+  const { can } = usePlan(userId);
   const [items, setItems]   = useState<ApuItem[]>(initialItems);
   const [view, setView]     = useState<View>({ kind: "list" });
   const [showLibrary, setShowLibrary] = useState(false);
+  const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; description: string } | null>(null);
   const [showAI, setShowAI]           = useState(false);
   const [selectedId, setSelectedId]   = useState<string | null>(null);
   const [search, setSearch]           = useState("");
@@ -2314,14 +2318,36 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
           selectedId={selectedId}
           search={search}
           onSelect={(id) => setSelectedId(id || null)}
-          onNew={openNew}
+          onNew={() => {
+            if (!can.createAPU(items.length)) {
+              setUpgradePrompt({
+                feature: language === "es" ? "APUs ilimitados" : "Unlimited APUs",
+                description: language === "es"
+                  ? "El plan gratuito incluye hasta 10 APUs por proyecto. Actualiza a Pro para crear ilimitados."
+                  : "The free plan includes up to 10 APUs per project. Upgrade to Pro for unlimited.",
+              });
+              return;
+            }
+            openNew();
+          }}
           onEdit={openEdit}
           onDelete={handleDelete}
           onDuplicate={handleDuplicate}
           onSendToBudget={handleSendToBudget}
           onPrint={(item) => printAPU(item, projectSettings, fmt, language as Locale)}
           onSearch={setSearch}
-          onAI={() => setShowAI(true)}
+          onAI={() => {
+            if (!can.useAI()) {
+              setUpgradePrompt({
+                feature: language === "es" ? "Sugerir con IA" : "AI Suggest",
+                description: language === "es"
+                  ? "Genera APUs automáticamente con inteligencia artificial."
+                  : "Generate APUs automatically with artificial intelligence.",
+              });
+              return;
+            }
+            setShowAI(true);
+          }}
           onLibrary={() => setShowLibrary(true)}
           onToggleLibrary={handleToggleLibrary}
         />
@@ -2384,6 +2410,15 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
             />
           </div>
         </div>
+      )}
+
+      {upgradePrompt && (
+        <UpgradePrompt
+          feature={upgradePrompt.feature}
+          description={upgradePrompt.description}
+          lang={language as Locale}
+          onClose={() => setUpgradePrompt(null)}
+        />
       )}
     </>
   );
