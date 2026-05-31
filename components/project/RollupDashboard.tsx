@@ -179,7 +179,7 @@ export default function RollupDashboard({ userId, locale: initialLocale, initial
 
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [budgetRows, setBudgetRows] = useState<Pick<BudgetRow, "project_id" | "quantity" | "unit_price" | "status" | "is_chapter" | "section" | "original_unit_price">[]>([]);
+  const [budgetRows, setBudgetRows] = useState<Pick<BudgetRow, "project_id" | "quantity" | "unit_price" | "status" | "is_chapter" | "section">[]>([]);
   const [apuCounts, setApuCounts] = useState<Pick<ApuItem, "project_id" | "id">[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("status");
@@ -195,7 +195,7 @@ export default function RollupDashboard({ userId, locale: initialLocale, initial
       setLoading(true);
       const [pRes, bRes, aRes] = await Promise.all([
         supabase.from("projects").select("*").eq("user_id", userId),
-        supabase.from("budget_rows").select("project_id, quantity, unit_price, status, is_chapter, section, original_unit_price").eq("is_chapter", false),
+        supabase.from("budget_rows").select("project_id, quantity, unit_price, status, is_chapter, section").eq("is_chapter", false),
         supabase.from("apu_items").select("project_id, id"),
       ]);
       // Filter budget rows and APU items to only include rows belonging to user's projects
@@ -227,7 +227,7 @@ export default function RollupDashboard({ userId, locale: initialLocale, initial
         const secRows = rows.filter((r) => r.section === sec);
         const currentTotal = secRows.reduce((s, r) => s + r.quantity * r.unit_price, 0);
         const originalTotal = secRows.reduce((s, r) => {
-          const origPrice = (r as { original_unit_price?: number | null }).original_unit_price ?? r.unit_price;
+          const origPrice = r.unit_price;
           return s + r.quantity * origPrice;
         }, 0);
         if (originalTotal > 0) {

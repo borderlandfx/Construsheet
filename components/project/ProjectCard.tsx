@@ -389,7 +389,6 @@ export default function ProjectCard({ project: initialProject, locale, onUpdated
                 unit: r.unit,
                 quantity: r.quantity,
                 unit_price: r.unit_price,
-                original_unit_price: r.unit_price,
                 original_quantity: r.quantity,
                 status: r.status,
                 assignee: r.assignee,

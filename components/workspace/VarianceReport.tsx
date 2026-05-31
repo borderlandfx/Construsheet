@@ -95,7 +95,7 @@ export default function VarianceReport() {
       const sb = supabaseRef.current;
       const [pRes, bRes] = await Promise.all([
         sb.from("projects").select("*").eq("id", projectId).single(),
-        sb.from("budget_rows").select("*, original_unit_price, original_quantity").eq("project_id", projectId).order("sort_order"),
+        sb.from("budget_rows").select("*").eq("project_id", projectId).order("sort_order"),
       ]);
       if (cancelled) return;
       setProject((pRes.data as Project) ?? null);
@@ -112,7 +112,7 @@ export default function VarianceReport() {
   const rowTotal = (r: BudgetRow) => r.total ?? r.quantity * r.unit_price;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rowOriginalTotal = (r: any) => {
-    const origPrice = r.original_unit_price ?? r.unit_price;
+    const origPrice = r.unit_price;
     const origQty = r.original_quantity ?? r.quantity;
     return origPrice * origQty;
   };
