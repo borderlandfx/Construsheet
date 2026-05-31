@@ -493,16 +493,10 @@ export default function ReportsTab() {
       {reportView === "dashboard" && (
         <>
           <ToolbarGroup label={lang === "es" ? "Exportar" : "Export"}>
-            <TBtn onClick={() => {
-              if (!can.exportCSV()) { setUpgradePrompt({ feature: "CSV Export", description: lang === "es" ? "Exporta reportes como CSV." : "Export reports as CSV." }); return; }
-              handleCSV();
-            }} disabled={itemRows.length === 0}>
+            <TBtn onClick={handleCSV} disabled={itemRows.length === 0}>
               <Download className="h-3.5 w-3.5" /> CSV
             </TBtn>
-            <TBtn onClick={() => {
-              if (!can.exportPDF()) { setUpgradePrompt({ feature: "PDF Export", description: lang === "es" ? "Exporta reportes como PDF." : "Export reports as PDF." }); return; }
-              handlePDF();
-            }} disabled={pdfGenerating}>
+            <TBtn onClick={handlePDF} disabled={pdfGenerating}>
               <FileText className="h-3.5 w-3.5" />{" "}
               {pdfGenerating ? (lang === "es" ? "Generando…" : "Generating…") : "PDF"}
             </TBtn>
