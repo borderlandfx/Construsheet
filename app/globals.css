@@ -189,6 +189,11 @@
     print-color-adjust: exact !important;
   }
 
+  /* Page break hints for executive summary sections */
+  .executive-summary-report table {
+    page-break-inside: avoid;
+  }
+
   @page {
     margin: 0.5in;
     size: letter portrait;
