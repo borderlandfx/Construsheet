@@ -271,11 +271,16 @@ function AddItemModal({ projectId, language, sections, rowCount, fmt, prefill, o
         const { data: chapterData } = await supabase.from("budget_rows").insert(chapterPayload).select().single();
         if (chapterData) onSaved(chapterData as BudgetRow);
       }
+      const parsedQty = parseFloat(quantity) || 0;
+      const parsedPrice = parseFloat(unitPrice) || 0;
       const payload: BudgetRowInsert = {
         project_id: projectId, section: effectiveSec,
         description: description.trim(), code: code.trim() || null,
-        unit: unit.trim() || null, quantity: parseFloat(quantity) || 0,
-        unit_price: parseFloat(unitPrice) || 0, status, assignee: assignee.trim() || null,
+        unit: unit.trim() || null, quantity: parsedQty,
+        unit_price: parsedPrice,
+        original_unit_price: parsedPrice,
+        original_quantity: parsedQty,
+        status, assignee: assignee.trim() || null,
         sort_order: rowCount + savedCount + (section === "__new__" ? 1 : 0),
       };
       const { data, error } = await supabase.from("budget_rows").insert(payload).select().single();
@@ -436,7 +441,9 @@ function AddActivitiesModal({
     const payloads: BudgetRowInsert[] = selectedApus.map((apu, idx) => ({
       project_id: projectId, apu_item_id: apu.id, section,
       code: apu.code, description: apu.description, unit: apu.unit,
-      quantity: 0, unit_price: apu.selling_price, status: "pending",
+      quantity: 0, unit_price: apu.selling_price,
+      original_unit_price: apu.selling_price, original_quantity: 0,
+      status: "pending",
       sort_order: rowCount + idx,
     }));
 
@@ -652,6 +659,8 @@ function PasteBudgetModal({ projectId, language, sections, rowCount, onSaved, on
       unit:        row.unit,
       quantity:    row.quantity,
       unit_price:  row.unit_price,
+      original_unit_price: row.unit_price,
+      original_quantity:   row.quantity,
       code:        row.code,
       status:      "pending" as const,
       sort_order:  rowCount + offset + i,
@@ -1829,6 +1838,8 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
       unit:        source.unit ?? undefined,
       quantity:    source.quantity,
       unit_price:  source.unit_price,
+      original_unit_price: source.unit_price,
+      original_quantity:   source.quantity,
       status:      source.status,
       assignee:    source.assignee ?? undefined,
       sort_order:  maxOrder + 1,
@@ -1904,6 +1915,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
       description: r.is_chapter ? newName : r.description,
       is_chapter: r.is_chapter,
       unit: r.unit, quantity: r.quantity, unit_price: r.unit_price,
+      original_unit_price: r.unit_price, original_quantity: r.quantity,
       status: r.status, assignee: r.assignee, sort_order: rows.length + i,
     }));
     const { data } = await supabase.from("budget_rows").insert(payloads).select();
@@ -2667,7 +2679,9 @@ function ImportAPUModal({ projectId, language, sections, rowCount, onSaved, onCl
     const payload: BudgetRowInsert = {
       project_id: projectId, apu_item_id: apu.id, section: effectiveSec,
       code: apu.code, description: apu.description, unit: apu.unit,
-      quantity: 0, unit_price: apu.selling_price, status: "pending", sort_order: rowCount,
+      quantity: 0, unit_price: apu.selling_price,
+      original_unit_price: apu.selling_price, original_quantity: 0,
+      status: "pending", sort_order: rowCount,
     };
     const { data, error } = await supabase.from("budget_rows").insert(payload).select().single();
     setImporting(null);

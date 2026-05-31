@@ -165,8 +165,9 @@
     print-color-adjust: exact !important;
   }
 
-  /* Show only the executive summary report */
-  .executive-summary-report {
+  /* Show only the report content */
+  .executive-summary-report,
+  .variance-report {
     box-shadow: none !important;
     border-radius: 0 !important;
     max-width: 100% !important;
@@ -176,12 +177,14 @@
   }
 
   /* Page breaks for major sections */
-  .executive-summary-report table {
+  .executive-summary-report table,
+  .variance-report table {
     page-break-inside: avoid;
   }
 
-  /* Ensure orange accents print */
-  .executive-summary-report * {
+  /* Ensure colored accents print */
+  .executive-summary-report *,
+  .variance-report * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }

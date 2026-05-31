@@ -15,6 +15,7 @@ import {
   BarChart3,
   ArrowRight,
   ClipboardList,
+  GitCompareArrows,
 } from "lucide-react";
 import {
   ToolbarPortal, ToolbarGroup, ToolbarSep,
@@ -39,8 +40,9 @@ import { useToast } from "@/lib/context/ToastContext";
 import type { BudgetRow } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 import ExecutiveSummary from "./ExecutiveSummary";
+import VarianceReport from "./VarianceReport";
 
-type ReportView = "dashboard" | "executive";
+type ReportView = "dashboard" | "executive" | "variance";
 
 // ─── Status colors ───────────────────────────────────────────────────────────
 
@@ -457,6 +459,9 @@ export default function ReportsTab() {
         <TBtn active={reportView === "executive"} onClick={() => setReportView("executive")}>
           <ClipboardList className="h-3.5 w-3.5" /> {lang === "es" ? "Resumen Ejecutivo" : "Executive Summary"}
         </TBtn>
+        <TBtn active={reportView === "variance"} onClick={() => setReportView("variance")}>
+          <GitCompareArrows className="h-3.5 w-3.5" /> {lang === "es" ? "Varianza" : "Variance"}
+        </TBtn>
       </ToolbarGroup>
       <ToolbarSep />
       {reportView === "dashboard" && (
@@ -487,6 +492,8 @@ export default function ReportsTab() {
 
     {reportView === "executive" ? (
       <ExecutiveSummary />
+    ) : reportView === "variance" ? (
+      <VarianceReport />
     ) : (
     <div className="flex flex-col gap-6">
       {/* ── Top row: 4 Metric Cards ─────────────────────────────── */}

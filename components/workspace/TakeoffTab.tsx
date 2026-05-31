@@ -1070,6 +1070,8 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
       unit:        item.unit ?? null,
       quantity:    item.quantity,
       unit_price:  0,
+      original_unit_price: 0,
+      original_quantity:   item.quantity,
       status:      "pending" as const,
       sort_order:  baseOrder + i,
     }));
@@ -1102,6 +1104,8 @@ export default function TakeoffTab({ initialItems, onCountChange }: TakeoffTabPr
       unit:        item.unit ?? null,
       quantity:    item.quantity,
       unit_price:  0,
+      original_unit_price: 0,
+      original_quantity:   item.quantity,
       status:      "pending" as const,
       sort_order:  nextOrder,
     });

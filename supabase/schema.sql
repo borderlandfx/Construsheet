@@ -90,6 +90,14 @@ CREATE TABLE IF NOT EXISTS budget_rows (
   created_at  TIMESTAMPTZ    DEFAULT NOW()
 );
 
+-- Migration: add original baseline columns for variance tracking
+ALTER TABLE budget_rows ADD COLUMN IF NOT EXISTS original_unit_price DECIMAL(12,2);
+ALTER TABLE budget_rows ADD COLUMN IF NOT EXISTS original_quantity   DECIMAL(12,3);
+
+-- Backfill: set original values = current values for existing rows that lack them
+-- UPDATE budget_rows SET original_unit_price = unit_price WHERE original_unit_price IS NULL;
+-- UPDATE budget_rows SET original_quantity   = quantity   WHERE original_quantity   IS NULL;
+
 -- ---------------------------------------------------------------------------
 -- 5. GANTT_TASKS
 -- ---------------------------------------------------------------------------

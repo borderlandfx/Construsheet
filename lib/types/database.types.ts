@@ -226,6 +226,8 @@ export interface Database {
           quantity: number;
           unit_price: number;
           total: number; // generated column – read-only
+          original_unit_price: number | null;
+          original_quantity: number | null;
           status: "approved" | "in-review" | "pending";
           assignee: string | null;
           sort_order: number;
@@ -243,6 +245,8 @@ export interface Database {
           unit?: string | null;
           quantity?: number;
           unit_price?: number;
+          original_unit_price?: number | null;
+          original_quantity?: number | null;
           // total is generated – omit on insert
           status?: "approved" | "in-review" | "pending";
           assignee?: string | null;
@@ -262,6 +266,7 @@ export interface Database {
           quantity?: number;
           unit_price?: number;
           // total is generated – omit on update
+          // original_unit_price / original_quantity are baseline — not updated
           status?: "approved" | "in-review" | "pending";
           assignee?: string | null;
           sort_order?: number;

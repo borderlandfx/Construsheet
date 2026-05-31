@@ -2275,6 +2275,8 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
       unit:        item.unit,
       quantity,
       unit_price:  item.selling_price,
+      original_unit_price: item.selling_price,
+      original_quantity:   quantity,
       status:      "pending" as const,
       sort_order:  nextOrder,
       is_chapter:  false,
