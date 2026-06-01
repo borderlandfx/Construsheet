@@ -521,10 +521,27 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   // Ref to the timeline header for measuring px-per-week
   const timelineHeaderRef = useRef<HTMLDivElement>(null);
 
-  // Chapters (is_chapter=true) sorted by sort_order, children grouped under them
+  // Chapters (is_chapter=true) sorted by sort_order
   const chapterTasks = tasks.filter((t) => !!t.is_chapter).sort((a, b) => a.sort_order - b.sort_order);
-  // Orphan tasks: not a chapter and no parent_task_id
-  const orphanTasks = tasks.filter((t) => !t.is_chapter && !t.parent_task_id).sort((a, b) => a.sort_order - b.sort_order);
+
+  // Build a set of child task IDs that belong to a chapter (by parent_task_id OR budget_section)
+  const childrenByChapter = new Map<string, GanttTask[]>();
+  const assignedIds = new Set<string>();
+  for (const chapter of chapterTasks) {
+    const children = tasks
+      .filter((t) => !t.is_chapter && (
+        t.parent_task_id === chapter.id ||
+        (t.budget_section && t.budget_section === chapter.budget_section)
+      ))
+      .sort((a, b) => a.sort_order - b.sort_order);
+    childrenByChapter.set(chapter.id, children);
+    for (const c of children) assignedIds.add(c.id);
+  }
+
+  // Orphan tasks: not a chapter and not assigned to any chapter
+  const orphanTasks = tasks
+    .filter((t) => !t.is_chapter && !assignedIds.has(t.id))
+    .sort((a, b) => a.sort_order - b.sort_order);
 
   const totalWeeks = Math.max(
     MIN_WEEKS,
@@ -1030,9 +1047,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       {tasks.length > 0 && (
         <div className="flex flex-col gap-2 md:hidden">
           {chapterTasks.map((chapter) => {
-            const children = tasks
-              .filter((t) => t.parent_task_id === chapter.id)
-              .sort((a, b) => a.sort_order - b.sort_order);
+            const children = childrenByChapter.get(chapter.id) ?? [];
             return (
               <div key={chapter.id}>
                 <div
@@ -1167,9 +1182,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
 
           {/* Chapter rows + their children */}
           {chapterTasks.map((chapter) => {
-            const children = tasks
-              .filter((t) => t.parent_task_id === chapter.id)
-              .sort((a, b) => a.sort_order - b.sort_order);
+            const children = childrenByChapter.get(chapter.id) ?? [];
             const isExpanded = expandedChapters.includes(chapter.id);
             return (
               <div key={chapter.id}>
