@@ -7,7 +7,7 @@ import {
   Plus, Trash2, Loader2, X, Search, Import, BookOpen,
   Copy, ClipboardPaste, Pencil, CheckSquare, GripVertical, Download,
   FileText, ArrowDownToLine, TableProperties, ChevronRight, ChevronDown,
-  Clock,
+  Clock, CalendarDays,
 } from "lucide-react";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -1104,10 +1104,10 @@ interface ContextMenuState {
   y: number;
 }
 
-function ChapterContextMenu({ menu, language, clipboard, onClose, onAddActivities, onNewGroup, onEdit, onCopy, onPaste, onApproveAll, onDelete }:
+function ChapterContextMenu({ menu, language, clipboard, onClose, onAddActivities, onNewGroup, onEdit, onCopy, onPaste, onApproveAll, onSendToSchedule, onDelete }:
   { menu: ContextMenuState; language: Locale; clipboard: string | null;
     onClose: () => void; onAddActivities: () => void; onNewGroup: () => void;
-    onEdit: () => void; onCopy: () => void; onPaste: () => void; onApproveAll: () => void; onDelete: () => void }
+    onEdit: () => void; onCopy: () => void; onPaste: () => void; onApproveAll: () => void; onSendToSchedule: () => void; onDelete: () => void }
 ) {
   const lang = language;
   useEffect(() => {
@@ -1124,6 +1124,8 @@ function ChapterContextMenu({ menu, language, clipboard, onClose, onAddActivitie
     { icon: <Copy className="h-3.5 w-3.5" />, label: lang === "es" ? "Copiar capítulo" : "Copy chapter", action: onCopy },
     { icon: <ClipboardPaste className="h-3.5 w-3.5" />, label: lang === "es" ? "Pegar capítulo" : "Paste chapter", action: onPaste, disabled: !clipboard },
     { icon: <CheckSquare className="h-3.5 w-3.5" />, label: lang === "es" ? "Aprobar todas" : "Approve all", action: onApproveAll },
+    null, // divider
+    { icon: <CalendarDays className="h-3.5 w-3.5" />, label: lang === "es" ? "Enviar a Cronograma" : "Send to Schedule", action: onSendToSchedule, accent: true },
     null, // divider
     { icon: <Trash2 className="h-3.5 w-3.5" />, label: lang === "es" ? "Eliminar" : "Delete", action: onDelete, danger: true },
   ];
@@ -1150,13 +1152,13 @@ function ChapterContextMenu({ menu, language, clipboard, onClose, onAddActivitie
             className="flex items-center gap-2.5 px-4 py-2 text-sm font-dm-sans text-left w-full transition-colors"
             style={{
               background: "none", border: "none", cursor: item.disabled ? "not-allowed" : "pointer",
-              color: item.danger ? "#ef4444" : item.disabled ? CS.muted : CS.text,
+              color: item.danger ? "#ef4444" : item.accent ? CS.accent : item.disabled ? CS.muted : CS.text,
               opacity: item.disabled ? 0.4 : 1,
             }}
-            onMouseEnter={(e) => !item.disabled && ((e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.06)")}
+            onMouseEnter={(e) => !item.disabled && ((e.currentTarget as HTMLButtonElement).style.background = item.accent ? "rgba(249,115,22,0.08)" : "rgba(255,255,255,0.06)")}
             onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "none")}
           >
-            <span style={{ color: item.danger ? "#ef4444" : CS.muted }}>{item.icon}</span>
+            <span style={{ color: item.danger ? "#ef4444" : item.accent ? CS.accent : CS.muted }}>{item.icon}</span>
             {item.label}
           </button>
         )
@@ -1173,10 +1175,10 @@ interface RowContextMenuState {
   y: number;
 }
 
-function RowContextMenu({ menu, sections, currentSection, language, onClose, onMoveToSection, onDuplicate, onDelete }:
+function RowContextMenu({ menu, sections, currentSection, language, onClose, onMoveToSection, onDuplicate, onSendToSchedule, onDelete }:
   { menu: RowContextMenuState; sections: string[]; currentSection: string; language: Locale;
     onClose: () => void; onMoveToSection: (section: string) => void;
-    onDuplicate: () => void; onDelete: () => void; }
+    onDuplicate: () => void; onSendToSchedule: () => void; onDelete: () => void; }
 ) {
   const lang = language;
   const otherSections = sections.filter((s) => s !== currentSection);
@@ -1237,6 +1239,15 @@ function RowContextMenu({ menu, sections, currentSection, language, onClose, onM
           ))}
         </>
       )}
+
+      <div style={{ height: 1, background: CS.border, margin: "4px 8px" }} />
+      <button style={{ ...itemStyle, color: CS.accent }}
+        onClick={() => { onSendToSchedule(); onClose(); }}
+        onMouseEnter={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "rgba(249,115,22,0.08)")}
+        onMouseLeave={(e) => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}>
+        <CalendarDays className="h-3.5 w-3.5" />
+        {lang === "es" ? "Enviar a Cronograma" : "Send to Schedule"}
+      </button>
 
       <div style={{ height: 1, background: CS.border, margin: "4px 8px" }} />
       <button style={{ ...itemStyle, color: "#ef4444" }}
@@ -2065,6 +2076,116 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
     setDeleteConfirm(null);
   }
 
+  // ── Send to Schedule (Gantt) ──────────────────────────────────────────────
+  const BAR_COLORS = ["#f97316", "#14b8a6", "#3b82f6", "#8b5cf6", "#fbbf24", "#22c55e"];
+
+  async function handleSendChapterToSchedule(section: string) {
+    // Find or create chapter gantt task
+    const { data: existing } = await supabase
+      .from("gantt_tasks")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("budget_section", section)
+      .eq("is_chapter", true)
+      .maybeSingle();
+
+    let chapterId = existing?.id;
+    if (!existing) {
+      const { data: newCh } = await supabase.from("gantt_tasks").insert({
+        project_id: projectId,
+        name: section,
+        budget_section: section,
+        is_chapter: true,
+        start_week: 1,
+        duration_weeks: 2,
+        color: BAR_COLORS[Math.floor(Math.random() * BAR_COLORS.length)],
+        status: "pending" as const,
+        sort_order: 0,
+      }).select().single();
+      chapterId = newCh?.id;
+    }
+
+    // Send all child rows
+    const chapterRows = rows.filter((r) => r.section === section && !r.is_chapter);
+    let created = 0;
+    for (const row of chapterRows) {
+      const { data: existingChild } = await supabase
+        .from("gantt_tasks").select("id")
+        .eq("project_id", projectId).eq("budget_row_id", row.id).maybeSingle();
+      if (!existingChild) {
+        await supabase.from("gantt_tasks").insert({
+          project_id: projectId,
+          name: row.description,
+          budget_section: section,
+          budget_row_id: row.id,
+          is_chapter: false,
+          parent_task_id: chapterId || null,
+          start_week: 1,
+          duration_weeks: 1,
+          color: "#94a3b8",
+          status: (row.status as "pending" | "in-review" | "approved") || "pending",
+          sort_order: row.sort_order || 0,
+        });
+        created++;
+      }
+    }
+    toast(
+      lang === "es"
+        ? `Capítulo "${section}" enviado al Cronograma (${created} nuevas)`
+        : `Chapter "${section}" sent to Schedule (${created} new)`,
+    );
+    setContextMenu(null);
+  }
+
+  async function handleSendRowToSchedule(row: BudgetRow) {
+    // Check if already exists
+    const { data: existingTask } = await supabase
+      .from("gantt_tasks").select("id")
+      .eq("project_id", projectId).eq("budget_row_id", row.id).maybeSingle();
+    if (existingTask) {
+      toast(lang === "es" ? "Ya está en el Cronograma" : "Already in Schedule");
+      return;
+    }
+
+    // Find or create parent chapter
+    const { data: parentCh } = await supabase
+      .from("gantt_tasks").select("id")
+      .eq("project_id", projectId).eq("budget_section", row.section).eq("is_chapter", true)
+      .maybeSingle();
+
+    let parentId = parentCh?.id || null;
+    if (!parentCh) {
+      const { data: newCh } = await supabase.from("gantt_tasks").insert({
+        project_id: projectId,
+        name: row.section,
+        budget_section: row.section,
+        is_chapter: true,
+        start_week: 1,
+        duration_weeks: 2,
+        color: BAR_COLORS[Math.floor(Math.random() * BAR_COLORS.length)],
+        status: "pending" as const,
+        sort_order: 0,
+      }).select().single();
+      parentId = newCh?.id || null;
+    }
+
+    await supabase.from("gantt_tasks").insert({
+      project_id: projectId,
+      name: row.description,
+      budget_section: row.section,
+      budget_row_id: row.id,
+      is_chapter: false,
+      parent_task_id: parentId,
+      start_week: 1,
+      duration_weeks: 1,
+      color: "#94a3b8",
+      status: (row.status as "pending" | "in-review" | "approved") || "pending",
+      sort_order: row.sort_order || 0,
+    });
+
+    toast(lang === "es" ? "Partida enviada al Cronograma" : "Item sent to Schedule");
+  }
+
   async function handleNewGroup() {
     if (!newGroupName.trim()) { setNewGroupModal(false); return; }
     const trimmedName = newGroupName.trim();
@@ -2610,6 +2731,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
             onClose={() => setRowContextMenu(null)}
             onMoveToSection={(sec) => handleMoveRowToSection(rowContextMenu.rowId, sec)}
             onDuplicate={() => handleDuplicateRow(targetRow)}
+            onSendToSchedule={() => handleSendRowToSchedule(targetRow)}
             onDelete={() => handleDelete(rowContextMenu.rowId)}
           />
         );
@@ -2628,6 +2750,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
           onCopy={() => handleCopySection(contextMenu.section)}
           onPaste={() => handlePasteSection(contextMenu.section)}
           onApproveAll={() => handleApproveSection(contextMenu.section)}
+          onSendToSchedule={() => handleSendChapterToSchedule(contextMenu.section)}
           onDelete={() => { setDeleteConfirm(contextMenu.section); setContextMenu(null); }}
         />
       )}
