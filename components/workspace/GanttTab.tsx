@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import {
   Trash2, Loader2, X,
   Download, Copy, ChevronRight, ChevronDown,
@@ -521,27 +521,38 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   // Ref to the timeline header for measuring px-per-week
   const timelineHeaderRef = useRef<HTMLDivElement>(null);
 
-  // Chapters (is_chapter=true) sorted by sort_order
-  const chapterTasks = tasks.filter((t) => !!t.is_chapter).sort((a, b) => a.sort_order - b.sort_order);
+  // Group chapters with children and calculate chapter bar spans
+  const { chapterTasks, childrenByChapter, orphanTasks } = useMemo(() => {
+    const chapters = tasks.filter((t) => !!t.is_chapter).sort((a, b) => a.sort_order - b.sort_order);
+    const childMap = new Map<string, GanttTask[]>();
+    const assigned = new Set<string>();
 
-  // Build a set of child task IDs that belong to a chapter (by parent_task_id OR budget_section)
-  const childrenByChapter = new Map<string, GanttTask[]>();
-  const assignedIds = new Set<string>();
-  for (const chapter of chapterTasks) {
-    const children = tasks
-      .filter((t) => !t.is_chapter && (
-        t.parent_task_id === chapter.id ||
-        (t.budget_section && t.budget_section === chapter.budget_section)
-      ))
+    const adjustedChapters = chapters.map((chapter) => {
+      const children = tasks
+        .filter((t) => !t.is_chapter && (
+          t.parent_task_id === chapter.id ||
+          (t.budget_section && t.budget_section === chapter.budget_section)
+        ))
+        .sort((a, b) => a.sort_order - b.sort_order);
+      childMap.set(chapter.id, children);
+      for (const c of children) assigned.add(c.id);
+
+      // Calculate span from children
+      if (children.length > 0) {
+        const startWeek = Math.min(...children.map((c) => c.start_week || 1));
+        const endWeek = Math.max(...children.map((c) => (c.start_week || 1) + (c.duration_weeks || 1)));
+        const duration = endWeek - startWeek;
+        return { ...chapter, start_week: startWeek, duration_weeks: duration > 0 ? duration : 1 };
+      }
+      return chapter;
+    });
+
+    const orphans = tasks
+      .filter((t) => !t.is_chapter && !assigned.has(t.id))
       .sort((a, b) => a.sort_order - b.sort_order);
-    childrenByChapter.set(chapter.id, children);
-    for (const c of children) assignedIds.add(c.id);
-  }
 
-  // Orphan tasks: not a chapter and not assigned to any chapter
-  const orphanTasks = tasks
-    .filter((t) => !t.is_chapter && !assignedIds.has(t.id))
-    .sort((a, b) => a.sort_order - b.sort_order);
+    return { chapterTasks: adjustedChapters, childrenByChapter: childMap, orphanTasks: orphans };
+  }, [tasks]);
 
   const totalWeeks = Math.max(
     MIN_WEEKS,
