@@ -683,6 +683,8 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       };
       currentDurationRef.current = task.duration_weeks;
       setResizingId(task.id);
+      document.body.style.cursor = "ew-resize";
+      document.body.style.userSelect = "none";
 
       function onMouseMove(ev: MouseEvent) {
         const state = resizeStateRef.current;
@@ -702,6 +704,8 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       async function onMouseUp() {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
         setResizingId(null);
         const state = resizeStateRef.current;
         resizeStateRef.current = null;
@@ -726,6 +730,8 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
     origStart: number;
     origDuration: number;
     pxPerWeek: number;
+    currentStart: number;
+    currentDuration: number;
   } | null>(null);
 
   const handleResizeLeftStart = useCallback(
@@ -742,16 +748,23 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         origStart: task.start_week,
         origDuration: task.duration_weeks,
         pxPerWeek,
+        currentStart: task.start_week,
+        currentDuration: task.duration_weeks,
       };
       setResizingId(task.id);
+      document.body.style.cursor = "ew-resize";
+      document.body.style.userSelect = "none";
 
       function onMouseMove(ev: MouseEvent) {
         const state = resizeLeftRef.current;
         if (!state) return;
         const delta = Math.round((ev.clientX - state.startX) / state.pxPerWeek);
-        const newStart = Math.max(1, state.origStart + delta);
+        // Clamp: can't move start past the original end
+        const newStart = Math.max(1, Math.min(state.origStart + delta, state.origStart + state.origDuration - 1));
         const startDelta = newStart - state.origStart;
         const newDuration = Math.max(1, state.origDuration - startDelta);
+        state.currentStart = newStart;
+        state.currentDuration = newDuration;
         setTasks((prev) =>
           prev.map((t) =>
             t.id === state.taskId ? { ...t, start_week: newStart, duration_weeks: newDuration } : t
@@ -762,24 +775,23 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       async function onMouseUp() {
         document.removeEventListener("mousemove", onMouseMove);
         document.removeEventListener("mouseup", onMouseUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
         setResizingId(null);
         const state = resizeLeftRef.current;
         resizeLeftRef.current = null;
         if (state) {
-          const task = tasks.find((t) => t.id === state.taskId);
-          if (task) {
-            await supabase
-              .from("gantt_tasks")
-              .update({ start_week: task.start_week, duration_weeks: task.duration_weeks })
-              .eq("id", state.taskId);
-          }
+          await supabase
+            .from("gantt_tasks")
+            .update({ start_week: state.currentStart, duration_weeks: state.currentDuration })
+            .eq("id", state.taskId);
         }
       }
 
       document.addEventListener("mousemove", onMouseMove);
       document.addEventListener("mouseup", onMouseUp);
     },
-    [supabase, totalWeeks, tasks] // eslint-disable-line react-hooks/exhaustive-deps
+    [supabase, totalWeeks] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ── Move bar (drag start_week) ───────────────────────────────────────────────
