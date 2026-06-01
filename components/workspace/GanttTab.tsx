@@ -1056,7 +1056,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
 
       {/* ── Mobile list view ─────────────────────────────── */}
       {tasks.length > 0 && (
-        <div className="flex flex-col gap-2 md:hidden">
+        <div className="flex flex-col gap-2 sm:hidden">
           {chapterTasks.map((chapter) => {
             const children = childrenByChapter.get(chapter.id) ?? [];
             return (
@@ -1122,7 +1122,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       {/* ── Gantt chart (desktop) ─────────────────────────── */}
       {tasks.length > 0 && (
         <div
-          className="rounded-[10px] overflow-hidden overflow-x-auto hidden md:block"
+          className="rounded-[10px] overflow-hidden overflow-x-auto hidden sm:block"
           style={{ border: "1px solid var(--color-border-tertiary)", background: "var(--color-background-tertiary)" }}
         >
           {/* Column headers */}
