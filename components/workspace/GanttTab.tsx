@@ -148,6 +148,7 @@ interface SortableGanttRowProps {
   onDuplicate: (task: GanttTask) => void;
   onProgressCycle: (id: string) => void;
   onResizeStart: (e: React.MouseEvent, task: GanttTask) => void;
+  onResizeLeftStart: (e: React.MouseEvent, task: GanttTask) => void;
   onMoveStart: (e: React.MouseEvent, task: GanttTask) => void;
   onEdit: (task: GanttTask) => void;
 }
@@ -155,7 +156,7 @@ interface SortableGanttRowProps {
 function SortableGanttRow({
   task, totalWeeks, todayPct, language, isResizing, isMoving, projectStart, timelineMinPx,
   isParent, isChild, isCollapsed, childCount, onToggleCollapse,
-  onDelete, onDuplicate, onProgressCycle, onResizeStart, onMoveStart, onEdit,
+  onDelete, onDuplicate, onProgressCycle, onResizeStart, onResizeLeftStart, onMoveStart, onEdit,
 }: SortableGanttRowProps) {
 
   const statusCfg = STATUS_CFG[task.status as StatusKey] ?? STATUS_CFG.pending;
@@ -254,6 +255,14 @@ function SortableGanttRow({
             transition: (isResizing || isMoving) ? "none" : "width 0.1s ease, left 0.1s ease",
           }}
         >
+          {/* Resize handle — left edge */}
+          {!isParent && (
+            <div onMouseDown={(e) => { e.stopPropagation(); onResizeLeftStart(e, task); }}
+              className="absolute left-0 top-0 bottom-0 flex items-center justify-center"
+              style={{ width: 8, cursor: "ew-resize", background: "rgba(0,0,0,0.15)", borderRadius: "4px 0 0 4px", flexShrink: 0, zIndex: 3 }}>
+              <div style={{ width: 1.5, height: Math.max(barHeight - 6, 4), background: "rgba(255,255,255,0.4)", borderRadius: 2 }} />
+            </div>
+          )}
           {/* Progress fill overlay */}
           {(task.progress_pct ?? 0) > 0 && (
             <div className="absolute inset-y-0 left-0 pointer-events-none"
@@ -261,7 +270,7 @@ function SortableGanttRow({
           )}
           {/* Duration label inside bar */}
           {widthPct > 5 && (
-            <span className="pl-1.5 text-white truncate"
+            <span className="text-white truncate text-center flex-1"
               style={{ fontSize: 9, fontWeight: 600, pointerEvents: "none", position: "relative" }}>
               {task.duration_weeks}{language === "es" ? "s" : "w"}
             </span>
@@ -269,7 +278,7 @@ function SortableGanttRow({
           {/* Resize handle — right edge */}
           <div onMouseDown={(e) => { e.stopPropagation(); onResizeStart(e, task); }}
             className="absolute right-0 top-0 bottom-0 flex items-center justify-center"
-            style={{ width: 8, cursor: "ew-resize", background: "rgba(0,0,0,0.15)", borderRadius: "0 4px 4px 0", flexShrink: 0 }}>
+            style={{ width: 8, cursor: "ew-resize", background: "rgba(0,0,0,0.15)", borderRadius: "0 4px 4px 0", flexShrink: 0, zIndex: 3 }}>
             <div style={{ width: 1.5, height: Math.max(barHeight - 6, 4), background: "rgba(255,255,255,0.4)", borderRadius: 2 }} />
           </div>
         </div>
@@ -708,6 +717,69 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       document.addEventListener("mouseup", onMouseUp);
     },
     [supabase, totalWeeks] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // ── Resize left edge (change start_week + duration_weeks together) ──────────
+  const resizeLeftRef = useRef<{
+    taskId: string;
+    startX: number;
+    origStart: number;
+    origDuration: number;
+    pxPerWeek: number;
+  } | null>(null);
+
+  const handleResizeLeftStart = useCallback(
+    (e: React.MouseEvent, task: GanttTask) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const containerW = timelineHeaderRef.current?.getBoundingClientRect().width ?? 600;
+      const pxPerWeek = containerW / totalWeeks;
+
+      resizeLeftRef.current = {
+        taskId: task.id,
+        startX: e.clientX,
+        origStart: task.start_week,
+        origDuration: task.duration_weeks,
+        pxPerWeek,
+      };
+      setResizingId(task.id);
+
+      function onMouseMove(ev: MouseEvent) {
+        const state = resizeLeftRef.current;
+        if (!state) return;
+        const delta = Math.round((ev.clientX - state.startX) / state.pxPerWeek);
+        const newStart = Math.max(1, state.origStart + delta);
+        const startDelta = newStart - state.origStart;
+        const newDuration = Math.max(1, state.origDuration - startDelta);
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === state.taskId ? { ...t, start_week: newStart, duration_weeks: newDuration } : t
+          )
+        );
+      }
+
+      async function onMouseUp() {
+        document.removeEventListener("mousemove", onMouseMove);
+        document.removeEventListener("mouseup", onMouseUp);
+        setResizingId(null);
+        const state = resizeLeftRef.current;
+        resizeLeftRef.current = null;
+        if (state) {
+          const task = tasks.find((t) => t.id === state.taskId);
+          if (task) {
+            await supabase
+              .from("gantt_tasks")
+              .update({ start_week: task.start_week, duration_weeks: task.duration_weeks })
+              .eq("id", state.taskId);
+          }
+        }
+      }
+
+      document.addEventListener("mousemove", onMouseMove);
+      document.addEventListener("mouseup", onMouseUp);
+    },
+    [supabase, totalWeeks, tasks] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // ── Move bar (drag start_week) ───────────────────────────────────────────────
@@ -1215,6 +1287,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
                   onDuplicate={handleDuplicateTask}
                   onProgressCycle={handleProgressCycle}
                   onResizeStart={handleResizeStart}
+                  onResizeLeftStart={handleResizeLeftStart}
                   onMoveStart={handleMoveStart}
                   onEdit={setEditingTask}
                 />
@@ -1237,6 +1310,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
                     onDuplicate={handleDuplicateTask}
                     onProgressCycle={handleProgressCycle}
                     onResizeStart={handleResizeStart}
+                    onResizeLeftStart={handleResizeLeftStart}
                     onMoveStart={handleMoveStart}
                     onEdit={setEditingTask}
                   />
@@ -1264,6 +1338,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
               onDuplicate={handleDuplicateTask}
               onProgressCycle={handleProgressCycle}
               onResizeStart={handleResizeStart}
+              onResizeLeftStart={handleResizeLeftStart}
               onMoveStart={handleMoveStart}
               onEdit={setEditingTask}
             />
