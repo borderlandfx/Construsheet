@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
-import {
-  Loader2, Wallet, TrendingUp, Calendar,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import {
   PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, Tooltip, Legend,
@@ -17,22 +15,25 @@ import type { Locale } from "@/lib/utils/i18n";
 
 // ─── Chart colors ───────────────────────────────────────────────────────────
 
-const COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444", "#ec4899"];
+const COLORS = ["#f97316", "#3b82f6", "#10b981", "#8b5cf6", "#f59e0b", "#14b8a6", "#ef4444"];
 
-// ─── Dark tooltip ───────────────────────────────────────────────────────────
+// ─── Custom tooltip (dark pill style for contrast on white) ─────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DarkTooltip({ active, payload, label, formatter }: any) {
+function ChartTooltip({ active, payload, label, formatter }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 shadow-xl text-xs">
-      {label && <p className="text-zinc-400 mb-1 font-medium">{label}</p>}
+    <div style={{
+      background: "#0f172a", border: "none", borderRadius: 8,
+      padding: "8px 14px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)", fontSize: 12,
+    }}>
+      {label && <p style={{ color: "#94a3b8", marginBottom: 4, fontWeight: 500 }}>{label}</p>}
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
       {payload.map((entry: any, i: number) => (
-        <div key={i} className="flex items-center gap-1.5 mb-0.5">
-          <span className="shrink-0 rounded-sm" style={{ width: 8, height: 8, background: entry.color }} />
-          <span className="text-zinc-300">{entry.name}:</span>
-          <span className="font-semibold text-zinc-100">{formatter ? formatter(entry.value) : entry.value}</span>
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 1 }}>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: entry.color, flexShrink: 0 }} />
+          <span style={{ color: "#cbd5e1" }}>{entry.name}:</span>
+          <span style={{ fontWeight: 600, color: "#f8fafc" }}>{formatter ? formatter(entry.value) : entry.value}</span>
         </div>
       ))}
     </div>
@@ -43,25 +44,20 @@ function DarkTooltip({ active, payload, label, formatter }: any) {
 
 const PRINT_STYLES = `
 @media print {
-  body { background: #ffffff !important; }
+  @page { margin: 1.5cm; }
+  body { background: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   nav, header, [data-sidebar], [data-toolbar], [role="tablist"],
   .no-print, button { display: none !important; }
   #executive-summary-report {
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 24px !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+  .report-card {
     box-shadow: none !important;
-    border: none !important;
-    background: #ffffff !important;
+    break-inside: avoid;
   }
-  #executive-summary-report .dark-card {
-    background: #ffffff !important;
-    border: 1px solid #d1d5db !important;
-    color: #111827 !important;
-  }
-  #executive-summary-report .dark-text { color: #111827 !important; }
-  #executive-summary-report .muted-text { color: #6b7280 !important; }
-  #executive-summary-report .accent-text { color: #f97316 !important; }
   .page-break { page-break-before: always; }
 }
 `;
@@ -105,8 +101,10 @@ export default function ExecutiveSummary() {
   const rowTotal = (r: BudgetRow) => r.total ?? r.quantity * r.unit_price;
 
   const budgetTotal = useMemo(() => itemRows.reduce((s, r) => s + rowTotal(r), 0), [itemRows]);
-  const approvedRows = useMemo(() => itemRows.filter((r) => r.status === "approved"), [itemRows]);
-  const approvedTotal = useMemo(() => approvedRows.reduce((s, r) => s + rowTotal(r), 0), [approvedRows]);
+  const approvedTotal = useMemo(
+    () => itemRows.filter((r) => r.status === "approved").reduce((s, r) => s + rowTotal(r), 0),
+    [itemRows],
+  );
   const approvedPct = budgetTotal > 0 ? (approvedTotal / budgetTotal) * 100 : 0;
 
   // Duration from gantt
@@ -122,7 +120,8 @@ export default function ExecutiveSummary() {
       const pct = budgetTotal > 0 ? (total / budgetTotal) * 100 : 0;
       const approvedPctCh = total > 0 ? (approved / total) * 100 : 0;
       const variance = approved - total;
-      return { name: sec, total, approved, pct, approvedPctCh, variance, color: COLORS[i % COLORS.length] };
+      const variancePct = total > 0 ? ((approved - total) / total) * 100 : 0;
+      return { name: sec, total, approved, pct, approvedPctCh, variance, variancePct, color: COLORS[i % COLORS.length] };
     });
   }, [itemRows, budgetTotal]);
 
@@ -140,10 +139,10 @@ export default function ExecutiveSummary() {
   // ── Bar chart data ────────────────────────────────────────────────────────
   const barData = useMemo(
     () => chapters.map((ch) => ({
-      name: ch.name.length > 10 ? ch.name.slice(0, 8) + "…" : ch.name,
+      name: ch.name.length > 8 ? ch.name.slice(0, 8) + "…" : ch.name,
       fullName: ch.name,
       [isEs ? "Presupuesto" : "Budget"]: ch.total,
-      [isEs ? "Ejecutado" : "Approved"]: ch.approved,
+      [isEs ? "Aprobado" : "Approved"]: ch.approved,
     })),
     [chapters, isEs],
   );
@@ -154,7 +153,6 @@ export default function ExecutiveSummary() {
     const plannedPerWeek = budgetTotal / (weeks || 1);
     const data: { week: string; [key: string]: number | string }[] = [];
     let cumPlanned = 0;
-    // Distribute approved by gantt task weeks
     const weeklyApproved = new Array(weeks).fill(0);
     itemRows.filter((r) => r.status === "approved").forEach((r) => {
       const task = ganttTasks.find(
@@ -193,9 +191,9 @@ export default function ExecutiveSummary() {
 
   // ── Short currency ────────────────────────────────────────────────────────
   const fmtShortNum = (v: number) => {
-    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-    if (v >= 1_000) return `${(v / 1_000).toFixed(0)}k`;
-    return String(Math.round(v));
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+    return `$${Math.round(v)}`;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmtShort = (v: any) => {
@@ -204,13 +202,13 @@ export default function ExecutiveSummary() {
   };
 
   // ── Progress ring SVG ─────────────────────────────────────────────────────
-  const ProgressRing = ({ pct, size = 40 }: { pct: number; size?: number }) => {
+  const ProgressRing = ({ pct, size = 48 }: { pct: number; size?: number }) => {
     const r = (size - 6) / 2;
     const circ = 2 * Math.PI * r;
     const offset = circ - (Math.min(pct, 100) / 100) * circ;
     return (
-      <svg width={size} height={size} className="shrink-0">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#27272a" strokeWidth={3} />
+      <svg width={size} height={size} style={{ flexShrink: 0 }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={3} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none"
           stroke="#f97316" strokeWidth={3} strokeLinecap="round"
@@ -223,123 +221,126 @@ export default function ExecutiveSummary() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
-        <Loader2 className="h-6 w-6 animate-spin text-zinc-500" />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "96px 0" }}>
+        <Loader2 className="h-6 w-6 animate-spin" style={{ color: "#94a3b8" }} />
       </div>
     );
   }
 
-  const cardClass = "dark-card bg-zinc-900 border border-zinc-800 rounded-2xl p-6 hover:border-zinc-700 transition-colors";
+  // ── Shared styles ─────────────────────────────────────────────────────────
+  const card: React.CSSProperties = {
+    background: "#ffffff",
+    border: "1px solid #e2e8f0",
+    borderRadius: 12,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+  };
+
+  const totalVariance = approvedTotal - budgetTotal;
+  const totalVariancePct = budgetTotal > 0 ? ((approvedTotal - budgetTotal) / budgetTotal) * 100 : 0;
 
   return (
     <>
       <style>{PRINT_STYLES}</style>
       <div
         id="executive-summary-report"
-        className="executive-summary-report font-sans"
-        style={{ maxWidth: 1100, margin: "0 auto", background: "#0a0a0a", color: "#f4f4f5" }}
+        style={{
+          background: "#f8fafc",
+          minHeight: "100%",
+          padding: 32,
+          fontFamily: "system-ui, -apple-system, sans-serif",
+          color: "#0f172a",
+          maxWidth: 1100,
+          margin: "0 auto",
+        }}
       >
 
         {/* ═══════════════════════════════════════════════════════════════════
             1. HEADER
             ═══════════════════════════════════════════════════════════════════ */}
-        <div
-          className="dark-card"
-          style={{
-            borderTop: "4px solid #f97316",
-            borderBottom: "1px solid #27272a",
-            padding: "24px 32px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "#18181b",
-          }}
-        >
-          {/* Left — Logo */}
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold accent-text" style={{ color: "#f97316" }}>⬡</span>
-            <span className="font-bold text-sm accent-text" style={{ color: "#f97316" }}>ConstruSheet</span>
+        <div className="report-card" style={{ ...card, padding: "24px 32px", marginBottom: 24, borderTop: "4px solid #f97316" }}>
+          {/* Top row: logo + date */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: "#64748b", fontWeight: 500 }}>
+              <span style={{ color: "#f97316", marginRight: 4 }}>⬡</span> ConstruSheet
+            </div>
+            <div style={{ fontSize: 13, color: "#64748b" }}>{dateStr}</div>
           </div>
 
-          {/* Center — Title */}
-          <div className="text-center">
-            <h1 className="font-bold text-lg tracking-wide dark-text" style={{ color: "#f4f4f5", letterSpacing: "0.05em", margin: 0 }}>
-              {isEs ? "REPORTE EJECUTIVO DE OBRA" : "PROJECT EXECUTIVE REPORT"}
+          {/* Center title */}
+          <div style={{ textAlign: "center", marginBottom: 12 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 800, color: "#0f172a", margin: 0, letterSpacing: "-0.02em" }}>
+              {isEs ? "Reporte Ejecutivo de Obra" : "Project Executive Report"}
             </h1>
-          </div>
-
-          {/* Right — Project info */}
-          <div className="text-right">
-            <p className="text-sm font-semibold dark-text" style={{ color: "#f4f4f5", margin: 0 }}>{project?.name ?? "—"}</p>
+            <div style={{ height: 3, background: "#f97316", width: 60, margin: "10px auto 12px", borderRadius: 2 }} />
+            <p style={{ fontSize: 16, color: "#64748b", margin: 0, fontWeight: 500 }}>
+              {project?.name ?? "—"}
+            </p>
             {project?.location && (
-              <p className="text-xs muted-text" style={{ color: "#a1a1aa", margin: "2px 0 0" }}>{project.location}</p>
+              <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>{project.location}</p>
             )}
-            <p className="text-xs muted-text" style={{ color: "#71717a", margin: "4px 0 0" }}>{dateStr}</p>
           </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
             2. KPI CARDS
             ═══════════════════════════════════════════════════════════════════ */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
           {/* Card 1 — Presupuesto Total */}
-          <div className={cardClass}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-orange-500/10">
-                <Wallet className="w-5 h-5 text-orange-500" />
-              </div>
-              <span className="text-xs font-medium muted-text" style={{ color: "#a1a1aa" }}>
-                {isEs ? "Presupuesto Total" : "Total Budget"}
-              </span>
-            </div>
-            <p className="text-2xl font-bold dark-text" style={{ color: "#f4f4f5", margin: 0 }}>{fmt(budgetTotal)}</p>
-            <div className="mt-3 w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full rounded-full bg-orange-500" style={{ width: "100%" }} />
+          <div className="report-card" style={{ ...card, padding: "20px 24px", position: "relative" }}>
+            <div style={{
+              position: "absolute", top: 16, right: 16, width: 36, height: 36,
+              borderRadius: "50%", background: "rgba(249,115,22,0.08)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16, fontWeight: 700, color: "#f97316",
+            }}>$</div>
+            <p style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {isEs ? "Presupuesto Total" : "Total Budget"}
+            </p>
+            <p style={{ fontSize: 28, fontWeight: 700, color: "#0f172a", margin: "8px 0 12px" }}>{fmt(budgetTotal)}</p>
+            <div style={{ width: "100%", height: 4, borderRadius: 2, background: "#f1f5f9", overflow: "hidden" }}>
+              <div style={{ width: "100%", height: "100%", borderRadius: 2, background: "#f97316" }} />
             </div>
           </div>
 
           {/* Card 2 — Avance Físico */}
-          <div className={cardClass}>
-            <div className="flex items-center gap-3 mb-3">
+          <div className="report-card" style={{ ...card, padding: "20px 24px" }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  {isEs ? "Avance Físico" : "Physical Progress"}
+                </p>
+                <p style={{ fontSize: 28, fontWeight: 700, color: "#f97316", margin: "8px 0 4px" }}>
+                  {approvedPct.toFixed(1)}%
+                </p>
+                <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
+                  {isEs ? "del presupuesto aprobado" : "of approved budget"}
+                </p>
+              </div>
               <ProgressRing pct={approvedPct} />
-              <span className="text-xs font-medium muted-text" style={{ color: "#a1a1aa" }}>
-                {isEs ? "Avance Físico" : "Physical Progress"}
-              </span>
             </div>
-            <p className="text-2xl font-bold accent-text" style={{ color: "#f97316", margin: 0 }}>{approvedPct.toFixed(1)}%</p>
-            <p className="text-xs mt-1 muted-text" style={{ color: "#71717a", margin: "4px 0 0" }}>
-              {isEs ? "del presupuesto aprobado" : "of approved budget"}
-            </p>
           </div>
 
           {/* Card 3 — Gasto Ejecutado */}
-          <div className={cardClass}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10">
-                <TrendingUp className="w-5 h-5 text-emerald-500" />
-              </div>
-              <span className="text-xs font-medium muted-text" style={{ color: "#a1a1aa" }}>
-                {isEs ? "Gasto Ejecutado" : "Executed Spend"}
-              </span>
+          <div className="report-card" style={{ ...card, padding: "20px 24px" }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {isEs ? "Gasto Ejecutado" : "Executed Spend"}
+            </p>
+            <p style={{ fontSize: 28, fontWeight: 700, color: "#10b981", margin: "8px 0 4px" }}>{fmt(approvedTotal)}</p>
+            <div style={{ width: "100%", height: 4, borderRadius: 2, background: "#f1f5f9", overflow: "hidden", marginBottom: 6 }}>
+              <div style={{ width: `${Math.min(approvedPct, 100)}%`, height: "100%", borderRadius: 2, background: "#10b981" }} />
             </div>
-            <p className="text-2xl font-bold" style={{ color: "#10b981", margin: 0 }}>{fmt(approvedTotal)}</p>
-            <p className="text-xs mt-1 muted-text" style={{ color: "#71717a", margin: "4px 0 0" }}>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
               {isEs ? "de" : "of"} {fmt(budgetTotal)}
             </p>
           </div>
 
-          {/* Card 4 — Estado del Proyecto */}
-          <div className={cardClass}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/10">
-                <Calendar className="w-5 h-5 text-blue-500" />
-              </div>
-              <span className="text-xs font-medium muted-text" style={{ color: "#a1a1aa" }}>
-                {isEs ? "Capítulos" : "Chapters"}
-              </span>
-            </div>
-            <p className="text-2xl font-bold" style={{ color: "#3b82f6", margin: 0 }}>{chapters.length}</p>
-            <p className="text-xs mt-1 muted-text" style={{ color: "#71717a", margin: "4px 0 0" }}>
+          {/* Card 4 — Capítulos */}
+          <div className="report-card" style={{ ...card, padding: "20px 24px" }}>
+            <p style={{ fontSize: 10, fontWeight: 600, color: "#94a3b8", margin: 0, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {isEs ? "Capítulos" : "Chapters"}
+            </p>
+            <p style={{ fontSize: 28, fontWeight: 700, color: "#3b82f6", margin: "8px 0 4px" }}>{chapters.length}</p>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>
               {itemRows.length} {isEs ? "partidas" : "items"}
             </p>
           </div>
@@ -348,27 +349,30 @@ export default function ExecutiveSummary() {
         {/* ═══════════════════════════════════════════════════════════════════
             3. TWO COLUMN LAYOUT
             ═══════════════════════════════════════════════════════════════════ */}
-        <div className="flex flex-col lg:flex-row gap-6 px-6 mb-6">
+        <div style={{ display: "grid", gridTemplateColumns: "40% 60%", gap: 20, marginBottom: 24 }}>
 
-          {/* ── Left Column 40% ─────────────────────────────────────────── */}
-          <div className="flex flex-col gap-6 w-full lg:w-[40%]">
+          {/* ── Left Column — Pie + Bar ─────────────────────────────────── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
             {/* Pie Chart — Distribución de Costos */}
-            <div className={cardClass}>
-              <h3 className="text-sm font-bold dark-text mb-4" style={{ color: "#f4f4f5" }}>
-                📊 {isEs ? "Distribución de Costos" : "Cost Distribution"}
+            <div className="report-card" style={{ ...card, padding: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", margin: "0 0 2px" }}>
+                {isEs ? "Distribución de Costos" : "Cost Distribution"}
               </h3>
+              <p style={{ fontSize: 12, color: "#94a3b8", margin: "0 0 12px" }}>
+                {isEs ? "Por capítulo" : "By chapter"}
+              </p>
               {pieData.length > 0 ? (
-                <div className="flex flex-col items-center">
-                  <div style={{ width: "100%", height: 220 }}>
+                <>
+                  <div style={{ height: 220 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
                           data={pieData}
                           cx="50%"
                           cy="50%"
-                          innerRadius={50}
-                          outerRadius={85}
+                          innerRadius={40}
+                          outerRadius={80}
                           paddingAngle={2}
                           dataKey="value"
                           stroke="none"
@@ -377,252 +381,258 @@ export default function ExecutiveSummary() {
                             <Cell key={idx} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip content={<DarkTooltip formatter={fmt} />} />
+                        <Tooltip content={<ChartTooltip formatter={fmt} />} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
-                  {/* Legend */}
-                  <div className="flex flex-col gap-2 w-full mt-2">
+                  {/* Legend below */}
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", marginTop: 8 }}>
                     {pieData.map((entry) => (
-                      <div key={entry.name} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="shrink-0 rounded-sm" style={{ width: 10, height: 10, background: entry.color }} />
-                          <span className="truncate muted-text" style={{ color: "#a1a1aa" }}>{entry.name}</span>
-                        </div>
-                        <span className="font-semibold dark-text shrink-0 ml-2" style={{ color: "#f4f4f5" }}>
-                          {entry.pct.toFixed(0)}%
-                        </span>
+                      <div key={entry.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: entry.color, flexShrink: 0 }} />
+                        <span style={{ color: "#64748b" }}>{entry.name}</span>
+                        <span style={{ fontWeight: 600, color: "#0f172a" }}>{entry.pct.toFixed(0)}%</span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </>
               ) : (
-                <p className="text-sm text-center py-10 muted-text" style={{ color: "#71717a" }}>
+                <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "40px 0" }}>
                   {isEs ? "Sin datos" : "No data"}
                 </p>
               )}
             </div>
 
             {/* Bar Chart — Avance vs Presupuesto */}
-            <div className={cardClass}>
-              <h3 className="text-sm font-bold dark-text mb-4" style={{ color: "#f4f4f5" }}>
-                📈 {isEs ? "Avance vs Presupuesto" : "Progress vs Budget"}
+            <div className="report-card" style={{ ...card, padding: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", margin: "0 0 12px" }}>
+                {isEs ? "Avance vs Presupuesto" : "Progress vs Budget"}
               </h3>
               {barData.length > 0 ? (
-                <div style={{ width: "100%", height: 280 }}>
+                <div style={{ height: 200 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={barData} margin={{ top: 16, right: 8, left: 8, bottom: 40 }}>
+                    <BarChart data={barData} margin={{ top: 16, right: 4, left: 4, bottom: 36 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                       <XAxis
                         dataKey="name"
-                        tick={{ fill: "#71717a", fontSize: 10 }}
-                        axisLine={{ stroke: "#27272a" }}
+                        tick={{ fill: "#94a3b8", fontSize: 10 }}
+                        axisLine={false}
                         tickLine={false}
                         angle={-35}
                         textAnchor="end"
                         interval={0}
-                        height={50}
+                        height={44}
                       />
                       <YAxis
-                        tick={{ fill: "#52525b", fontSize: 10 }}
+                        tick={{ fill: "#94a3b8", fontSize: 10 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={fmtShort}
                       />
-                      <Tooltip content={<DarkTooltip formatter={fmt} />} />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4, color: "#a1a1aa" }} />
-                      <Bar dataKey={isEs ? "Presupuesto" : "Budget"} fill="#52525b" radius={[3, 3, 0, 0]} maxBarSize={28}>
-                        <LabelList dataKey={isEs ? "Presupuesto" : "Budget"} position="top" formatter={fmtShort} style={{ fill: "#71717a", fontSize: 9 }} />
+                      <Tooltip content={<ChartTooltip formatter={fmt} />} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4, color: "#64748b" }} />
+                      <Bar dataKey={isEs ? "Presupuesto" : "Budget"} fill="#cbd5e1" radius={[3, 3, 0, 0]} maxBarSize={24}>
+                        <LabelList dataKey={isEs ? "Presupuesto" : "Budget"} position="top" formatter={fmtShort} style={{ fill: "#94a3b8", fontSize: 9 }} />
                       </Bar>
-                      <Bar dataKey={isEs ? "Ejecutado" : "Approved"} fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={28}>
-                        <LabelList dataKey={isEs ? "Ejecutado" : "Approved"} position="top" formatter={fmtShort} style={{ fill: "#10b981", fontSize: 9 }} />
+                      <Bar dataKey={isEs ? "Aprobado" : "Approved"} fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={24}>
+                        <LabelList dataKey={isEs ? "Aprobado" : "Approved"} position="top" formatter={fmtShort} style={{ fill: "#10b981", fontSize: 9 }} />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <p className="text-sm text-center py-10 muted-text" style={{ color: "#71717a" }}>
+                <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "40px 0" }}>
                   {isEs ? "Sin datos" : "No data"}
                 </p>
               )}
             </div>
           </div>
 
-          {/* ── Right Column 60% — S-Curve ──────────────────────────────── */}
-          <div className="w-full lg:w-[60%]">
-            <div className={`${cardClass} h-full flex flex-col`}>
-              <div className="mb-4">
-                <h3 className="text-sm font-bold dark-text" style={{ color: "#f4f4f5" }}>
-                  📉 {isEs ? "Curva S — Costo Acumulado" : "S-Curve — Cumulative Cost"}
-                </h3>
-                <p className="text-xs mt-1 muted-text" style={{ color: "#71717a" }}>
-                  {isEs ? "Planificado vs Ejecutado" : "Planned vs Executed"}
-                </p>
-              </div>
-              {sCurveData.length > 0 ? (
-                <div className="flex-1" style={{ minHeight: 400 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={sCurveData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                      <XAxis
-                        dataKey="week"
-                        tick={{ fill: "#71717a", fontSize: 10 }}
-                        axisLine={{ stroke: "#27272a" }}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tick={{ fill: "#52525b", fontSize: 10 }}
-                        axisLine={false}
-                        tickLine={false}
-                        tickFormatter={fmtShort}
-                      />
-                      <Tooltip content={<DarkTooltip formatter={fmt} />} />
-                      <Legend
-                        wrapperStyle={{ fontSize: 11, paddingTop: 8, color: "#a1a1aa" }}
-                        formatter={(value: string) => <span style={{ color: "#a1a1aa" }}>{value}</span>}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey={isEs ? "Planificado" : "Planned"}
-                        stroke="#3b82f6"
-                        strokeWidth={2.5}
-                        dot={false}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey={isEs ? "Ejecutado" : "Executed"}
-                        stroke="#f97316"
-                        strokeWidth={2.5}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <p className="text-sm text-center py-10 muted-text" style={{ color: "#71717a" }}>
-                  {isEs ? "Sin datos" : "No data"}
-                </p>
-              )}
+          {/* ── Right Column — S-Curve ──────────────────────────────────── */}
+          <div className="report-card" style={{ ...card, padding: 24, display: "flex", flexDirection: "column" }}>
+            <div style={{ marginBottom: 16 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0f172a", margin: 0 }}>
+                {isEs ? "Curva S" : "S-Curve"}
+              </h3>
+              <p style={{ fontSize: 13, color: "#94a3b8", margin: "4px 0 0" }}>
+                {isEs ? "Costo Acumulado Planificado vs Ejecutado" : "Cumulative Cost — Planned vs Executed"}
+              </p>
             </div>
+            {sCurveData.length > 0 ? (
+              <div style={{ flex: 1, minHeight: 380 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={sCurveData} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis
+                      dataKey="week"
+                      tick={{ fill: "#94a3b8", fontSize: 11 }}
+                      axisLine={{ stroke: "#e2e8f0" }}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      tick={{ fill: "#94a3b8", fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={fmtShort}
+                    />
+                    <Tooltip content={<ChartTooltip formatter={fmt} />} />
+                    <Legend
+                      wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                      formatter={(value: string) => <span style={{ color: "#64748b" }}>{value}</span>}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={isEs ? "Planificado" : "Planned"}
+                      stroke="#3b82f6"
+                      strokeWidth={2.5}
+                      strokeDasharray="6 3"
+                      dot={false}
+                      activeDot={{ r: 5, fill: "#3b82f6" }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey={isEs ? "Ejecutado" : "Executed"}
+                      stroke="#f97316"
+                      strokeWidth={2.5}
+                      dot={false}
+                      activeDot={{ r: 5, fill: "#f97316" }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <p style={{ fontSize: 13, color: "#94a3b8", textAlign: "center", padding: "40px 0" }}>
+                {isEs ? "Sin datos" : "No data"}
+              </p>
+            )}
           </div>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
             4. COST SUMMARY TABLE
             ═══════════════════════════════════════════════════════════════════ */}
-        <div className="px-6 pb-6 page-break">
-          <h3 className="text-sm font-bold dark-text mb-4 flex items-center gap-2" style={{ color: "#f4f4f5" }}>
-            <span>📋</span> {isEs ? "Resumen de Costos por Capítulo" : "Cost Summary by Chapter"}
-          </h3>
-          <div className="dark-card bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
-              <thead>
-                <tr className="bg-zinc-800">
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "#a1a1aa" }}>#</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider" style={{ color: "#a1a1aa" }}>
-                    {isEs ? "Categoría" : "Category"}
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider" style={{ color: "#a1a1aa" }}>
-                    {isEs ? "Presupuesto" : "Budget"}
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider" style={{ color: "#a1a1aa" }}>
-                    {isEs ? "Ejecutado" : "Executed"}
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider" style={{ color: "#a1a1aa" }}>
-                    {isEs ? "Variación" : "Variance"}
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider" style={{ color: "#a1a1aa" }}>
-                    % {isEs ? "Aprobado" : "Approved"}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {chapters.map((ch, i) => {
-                  const varianceSign = ch.variance > 0 ? "over" : ch.variance < 0 ? "under" : "zero";
-                  return (
-                    <tr
-                      key={ch.name}
-                      className="hover:bg-zinc-800/50 transition-colors"
-                      style={{ borderBottom: "1px solid rgba(39,39,42,0.5)" }}
-                    >
-                      <td className="px-4 py-3 text-xs muted-text" style={{ color: "#71717a" }}>{i + 1}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="shrink-0 rounded-full" style={{ width: 8, height: 8, background: ch.color }} />
-                          <span className="dark-text text-sm" style={{ color: "#f4f4f5" }}>{ch.name}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right dark-text font-medium" style={{ color: "#f4f4f5" }}>{fmt(ch.total)}</td>
-                      <td className="px-4 py-3 text-right font-medium" style={{ color: "#10b981" }}>{fmt(ch.approved)}</td>
-                      <td className="px-4 py-3 text-right font-medium" style={{
-                        color: varianceSign === "over" ? "#ef4444" : varianceSign === "under" ? "#10b981" : "#a1a1aa",
-                      }}>
-                        {varianceSign === "over" && "↑ "}
-                        {varianceSign === "under" && "↓ "}
-                        {varianceSign === "zero" && "→ "}
-                        {fmt(Math.abs(ch.variance))}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-16 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                            <div
-                              className="h-full rounded-full"
-                              style={{ width: `${Math.min(ch.approvedPctCh, 100)}%`, background: ch.approvedPctCh > 100 ? "#ef4444" : "#10b981" }}
-                            />
-                          </div>
-                          <span className="text-xs font-medium dark-text" style={{ color: "#f4f4f5", minWidth: 36, textAlign: "right" }}>
-                            {ch.approvedPctCh.toFixed(0)}%
-                          </span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="bg-zinc-800">
-                  <td className="px-4 py-3" />
-                  <td className="px-4 py-3 font-bold dark-text" style={{ color: "#f4f4f5" }}>Total</td>
-                  <td className="px-4 py-3 text-right font-bold dark-text" style={{ color: "#f4f4f5" }}>{fmt(budgetTotal)}</td>
-                  <td className="px-4 py-3 text-right font-bold" style={{ color: "#10b981" }}>{fmt(approvedTotal)}</td>
-                  <td className="px-4 py-3 text-right font-bold" style={{
-                    color: approvedTotal - budgetTotal > 0 ? "#ef4444" : approvedTotal - budgetTotal < 0 ? "#10b981" : "#a1a1aa",
-                  }}>
-                    {approvedTotal - budgetTotal > 0 && "↑ "}
-                    {approvedTotal - budgetTotal < 0 && "↓ "}
-                    {approvedTotal - budgetTotal === 0 && "→ "}
-                    {fmt(Math.abs(approvedTotal - budgetTotal))}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <div className="w-16 h-1.5 rounded-full bg-zinc-700 overflow-hidden">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${Math.min(approvedPct, 100)}%`, background: approvedPct > 100 ? "#ef4444" : "#10b981" }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold dark-text" style={{ color: "#f4f4f5", minWidth: 36, textAlign: "right" }}>
-                        {approvedPct.toFixed(0)}%
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+        <div className="report-card page-break" style={{ ...card, overflow: "hidden", marginBottom: 24 }}>
+          {/* Header bar */}
+          <div style={{ background: "#f8fafc", padding: "16px 24px", borderBottom: "1px solid #e2e8f0" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "#0f172a", margin: 0 }}>
+              {isEs ? "Resumen de Costos por Capítulo" : "Cost Summary by Chapter"}
+            </h3>
+            <p style={{ fontSize: 12, color: "#94a3b8", margin: "2px 0 0" }}>
+              {chapters.length} {isEs ? "capítulos" : "chapters"} · {itemRows.length} {isEs ? "partidas" : "items"}
+            </p>
           </div>
+
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+                <th style={{ padding: "12px 16px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "center", width: 40, fontWeight: 600 }}>#</th>
+                <th style={{ padding: "12px 16px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "left", fontWeight: 600 }}>
+                  {isEs ? "Capítulo" : "Chapter"}
+                </th>
+                <th style={{ padding: "12px 16px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right", fontWeight: 600 }}>
+                  {isEs ? "Presupuesto" : "Budget"}
+                </th>
+                <th style={{ padding: "12px 16px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right", fontWeight: 600 }}>
+                  {isEs ? "Ejecutado" : "Executed"}
+                </th>
+                <th style={{ padding: "12px 16px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right", fontWeight: 600 }}>
+                  {isEs ? "Variación" : "Variance"}
+                </th>
+                <th style={{ padding: "12px 16px", fontSize: 11, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", textAlign: "right", fontWeight: 600 }}>
+                  % {isEs ? "Aprobado" : "Approved"}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {chapters.map((ch, i) => {
+                const isOver = ch.variancePct > 0;
+                const isUnder = ch.variancePct < 0;
+                return (
+                  <tr
+                    key={ch.name}
+                    style={{ borderBottom: "1px solid #f1f5f9", transition: "background 150ms" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "#f8fafc"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+                  >
+                    <td style={{ padding: "12px 16px", textAlign: "center", color: "#94a3b8", fontSize: 12 }}>{i + 1}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: ch.color, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 500, color: "#0f172a" }}>{ch.name}</span>
+                      </div>
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: "#334155" }}>{fmt(ch.total)}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", color: ch.approved > 0 ? "#10b981" : "#334155" }}>{fmt(ch.approved)}</td>
+                    <td style={{
+                      padding: "12px 16px", textAlign: "right", fontWeight: 600,
+                      color: isOver ? "#ef4444" : isUnder ? "#10b981" : "#94a3b8",
+                    }}>
+                      {isOver ? "↑ " : isUnder ? "↓ " : "→ "}
+                      {isOver ? "+" : ""}{ch.variancePct.toFixed(1)}%
+                    </td>
+                    <td style={{ padding: "12px 16px", textAlign: "right" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                        <div style={{ width: 60, height: 6, borderRadius: 3, background: "#f1f5f9", overflow: "hidden" }}>
+                          <div style={{
+                            width: `${Math.min(ch.approvedPctCh, 100)}%`,
+                            height: "100%",
+                            borderRadius: 3,
+                            background: ch.approvedPctCh > 100 ? "#ef4444" : "#10b981",
+                          }} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 500, color: "#0f172a", minWidth: 36, textAlign: "right" }}>
+                          {ch.approvedPctCh.toFixed(0)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: "#f8fafc", borderTop: "2px solid #e2e8f0" }}>
+                <td style={{ padding: "14px 16px" }} />
+                <td style={{ padding: "14px 16px", fontWeight: 700, color: "#0f172a", textTransform: "uppercase", fontSize: 12 }}>Total</td>
+                <td style={{ padding: "14px 16px", textAlign: "right", fontWeight: 700, color: "#0f172a" }}>{fmt(budgetTotal)}</td>
+                <td style={{ padding: "14px 16px", textAlign: "right", fontWeight: 700, color: "#10b981" }}>{fmt(approvedTotal)}</td>
+                <td style={{
+                  padding: "14px 16px", textAlign: "right", fontWeight: 700,
+                  color: totalVariance > 0 ? "#ef4444" : totalVariance < 0 ? "#10b981" : "#94a3b8",
+                }}>
+                  {totalVariance > 0 ? "↑ +" : totalVariance < 0 ? "↓ " : "→ "}
+                  {totalVariancePct.toFixed(1)}%
+                </td>
+                <td style={{ padding: "14px 16px", textAlign: "right" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+                    <div style={{ width: 60, height: 6, borderRadius: 3, background: "#e2e8f0", overflow: "hidden" }}>
+                      <div style={{
+                        width: `${Math.min(approvedPct, 100)}%`,
+                        height: "100%",
+                        borderRadius: 3,
+                        background: approvedPct > 100 ? "#ef4444" : "#10b981",
+                      }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", minWidth: 36, textAlign: "right" }}>
+                      {approvedPct.toFixed(0)}%
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
 
         {/* ═══════════════════════════════════════════════════════════════════
             5. FOOTER
             ═══════════════════════════════════════════════════════════════════ */}
-        <div className="text-center px-6 pb-6">
-          <div style={{ borderTop: "1px solid #27272a", paddingTop: 16 }}>
-            <p className="text-xs muted-text" style={{ color: "#52525b", margin: 0 }}>
-              {isEs ? "Generado por" : "Generated by"} <span className="accent-text" style={{ color: "#f97316" }}>ConstruSheet</span> · construsheet.vercel.app
-            </p>
-            <p className="text-xs muted-text" style={{ color: "#3f3f46", margin: "4px 0 0" }}>
-              {dateStr} · Project ID: {projectId}
-            </p>
-          </div>
+        <div style={{ textAlign: "center", paddingTop: 8 }}>
+          <p style={{ fontSize: 11, color: "#94a3b8", margin: 0 }}>
+            {isEs ? "Generado por" : "Generated by"}{" "}
+            <span style={{ color: "#f97316", fontWeight: 600 }}>ConstruSheet</span> · construsheet.vercel.app
+          </p>
+          <p style={{ fontSize: 10, color: "#cbd5e1", marginTop: 4 }}>
+            {dateStr} · Project ID: {projectId}
+          </p>
         </div>
       </div>
     </>
