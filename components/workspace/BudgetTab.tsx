@@ -1263,7 +1263,7 @@ function RowContextMenu({ menu, sections, currentSection, language, onClose, onM
 
 // ─── SortableChapterHeader ────────────────────────────────────────────────────
 
-function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDraft, isDragging: isDraggingProp,
+function SortableChapterHeader({ section, secTotal, fmt, lang: _lang, isEditing, editDraft, isDragging: isDraggingProp,
   isCollapsed, onToggleCollapse,
   onContextMenu, onEditChange, onEditBlur, onEditKeyDown }:
   { section: string; secTotal: number; fmt: (n: number) => string; lang: Locale;
@@ -1290,9 +1290,19 @@ function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDr
   };
 
   return (
-    <tr ref={setNodeRef} style={style} onContextMenu={onContextMenu}>
+    <tr ref={setNodeRef} style={style} onContextMenu={onContextMenu} className="group">
+      {/* Chapter drag handle */}
+      <td className="w-8 text-center" style={{ padding: 0, background: "rgba(249,115,22,0.15)", borderBottom: `1px solid rgba(249,115,22,0.2)` }}>
+        <div
+          className="drag-handle flex items-center justify-center cursor-grab active:cursor-grabbing opacity-40 group-hover:opacity-100 transition-opacity touch-none"
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical className="w-4 h-4 text-orange-500" />
+        </div>
+      </td>
       <td
-        colSpan={20}
+        colSpan={19}
         style={{
           padding: 0,
           background: "rgba(249,115,22,0.15)",
@@ -1300,7 +1310,7 @@ function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDr
           cursor: "context-menu",
         }}
       >
-        <div className="flex items-center justify-between px-3 py-2 group">
+        <div className="flex items-center justify-between px-3 py-2">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             {/* Collapse/expand chevron */}
             <button
@@ -1310,22 +1320,6 @@ function SortableChapterHeader({ section, secTotal, fmt, lang, isEditing, editDr
               style={{ width: 20, height: 20, background: "none", border: "none", cursor: "pointer", color: "#f97316" }}
             >
               <Chevron className="h-3.5 w-3.5" />
-            </button>
-            {/* Chapter drag handle on hover */}
-            <button
-              {...attributes}
-              {...listeners}
-              tabIndex={-1}
-              onClick={(e) => e.stopPropagation()}
-              className="items-center justify-center shrink-0 touch-none hidden group-hover:flex"
-              style={{
-                width: 20, height: 20, background: "none", border: "none",
-                cursor: dragging ? "grabbing" : "grab",
-                color: "#f97316", opacity: 0.5,
-              }}
-              aria-label={lang === "es" ? "Arrastrar para reordenar capítulo" : "Drag to reorder chapter"}
-            >
-              <GripVertical className="h-3.5 w-3.5" />
             </button>
             {isEditing ? (
               <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
@@ -1401,7 +1395,17 @@ function SortableBudgetRow({
     <tr ref={setNodeRef} style={style} className="group cursor-pointer"
       onClick={onSelect}
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, row.id); }}>
-      {/* # with drag handle on hover + history dot */}
+      {/* Drag handle */}
+      <td className="w-8 text-center">
+        <div
+          className="drag-handle flex items-center justify-center cursor-grab active:cursor-grabbing opacity-40 group-hover:opacity-100 transition-opacity touch-none"
+          {...listeners}
+          {...attributes}
+        >
+          <GripVertical className="w-4 h-4 text-orange-500" />
+        </div>
+      </td>
+      {/* Row number + history dot */}
       <td style={{ padding: cellPad, textAlign: "center", width: 40, fontSize: 12, color: "var(--cs-muted)", position: "relative" }}>
         {historyAge && (
           <span
@@ -1415,21 +1419,7 @@ function SortableBudgetRow({
               : (lang === "es" ? "Modificado" : "Modified")}
           />
         )}
-        <span className="group-hover:hidden">{globalRowNum}</span>
-        <button
-          {...attributes}
-          {...listeners}
-          tabIndex={-1}
-          onClick={(e) => e.stopPropagation()}
-          className="hidden group-hover:flex items-center justify-center touch-none"
-          style={{
-            width: 20, height: 20, background: "none", border: "none",
-            cursor: "grab", color: "var(--cs-muted)", margin: "0 auto",
-          }}
-          aria-label="Drag to reorder"
-        >
-          <GripVertical className="h-3.5 w-3.5" />
-        </button>
+        {globalRowNum}
       </td>
       <td style={{ padding: cellPad }} className="hidden md:table-cell">
         <InlineCell field="code" rawValue={row.code ?? ""}
@@ -2598,6 +2588,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
             <table className="w-full font-dm-sans" style={{ minWidth: "auto" }}>
               <thead>
                 <tr>
+                  <th style={{ ...thStyle, width: 32 }}></th>
                   <th style={{ ...thStyle, width: 40, textAlign: "center" }}>#</th>
                   <th style={{ ...thStyle, width: 80 }} className="hidden md:table-cell">{lang === "es" ? "Código" : "Code"}</th>
                   <th style={thStyle}>{lang === "es" ? "Descripción" : "Description"}</th>
@@ -2678,11 +2669,11 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
 
               <tfoot style={{ position: "sticky", bottom: 0, zIndex: 2 }}>
                 <tr>
-                  <td colSpan={6} className="hidden md:table-cell" style={{ padding: "12px 10px", textAlign: "right", fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: CS.muted, background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
+                  <td colSpan={7} className="hidden md:table-cell" style={{ padding: "12px 10px", textAlign: "right", fontFamily: "var(--font-dm-sans)", fontSize: 13, fontWeight: 700, color: CS.muted, background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
                     {lang === "es" ? "TOTAL DEL PRESUPUESTO" : "BUDGET TOTAL"}
                   </td>
                   {/* Mobile label */}
-                  <td colSpan={2} className="md:hidden" style={{ padding: "12px 10px", fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color: CS.muted, background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
+                  <td colSpan={3} className="md:hidden" style={{ padding: "12px 10px", fontFamily: "var(--font-dm-sans)", fontSize: 12, fontWeight: 700, color: CS.muted, background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
                     {lang === "es" ? "TOTAL" : "TOTAL"}
                   </td>
                   <td style={{ padding: "12px 10px", textAlign: "right", background: "var(--cs-bg2, var(--cs-surface))", borderTop: `1px solid var(--cs-border)` }}>
