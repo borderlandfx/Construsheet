@@ -2449,7 +2449,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "+ Agregar" : "+ Add Item"}
       </TBtnPrimary>
     </ToolbarPortal>
-    <div className="flex flex-col gap-4" style={{ paddingRight: panelOpen ? 408 : 0, transition: "padding-right 200ms ease" }}>
+    <div className="flex flex-col gap-4" style={{ padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%", overflowY: "auto" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
@@ -2585,7 +2585,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="rounded-[10px] overflow-hidden" style={{ border: `1px solid ${CS.border}` }}>
           <div className="overflow-x-auto">
-            <table className="w-full font-dm-sans" style={{ minWidth: "auto" }}>
+            <table className="w-full font-dm-sans" style={{ minWidth: 900 }}>
               <thead>
                 <tr>
                   <th style={{ ...thStyle, width: 32 }}></th>
@@ -2597,7 +2597,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
                   <th style={{ ...thStyle, textAlign: "right", width: 110 }} className="hidden md:table-cell">P.U.</th>
                   <th style={{ ...thStyle, textAlign: "right", width: 120 }}>Total</th>
                   <th style={{ ...thStyle, width: 110, textAlign: "center" }}>{lang === "es" ? "Estatus" : "Status"}</th>
-                  <th style={{ ...thStyle, width: 120 }} className="hidden md:table-cell">{lang === "es" ? "Responsable" : "Assignee"}</th>
+                  <th style={{ ...thStyle, width: 130 }} className="hidden md:table-cell">{lang === "es" ? "Responsable" : "Assignee"}</th>
                 </tr>
               </thead>
               <SortableContext items={sections.map((s) => `chapter:${s}`)} strategy={verticalListSortingStrategy}>

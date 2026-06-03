@@ -316,16 +316,21 @@ function WorkspaceInner({
       {/* ── Tab content (scrollable) ─────────────────── */}
       <div
         className="flex-1 overflow-y-auto"
-        style={{ background: "var(--cs-bg)" }}
+        style={{ background: "var(--cs-bg)", display: "flex", flexDirection: "column", width: "100%" }}
       >
-        <div className="px-3 py-4 md:px-6 md:py-6" style={{ maxWidth: 1100, margin: "0 auto" }}>
-          {activeTab === "apu"     && <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />}
-          {activeTab === "budget"  && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
-          {activeTab === "gantt"   && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
-          {activeTab === "takeoff" && <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />}
-          {activeTab === "reports" && <ReportsTab />}
-          {activeTab === "costs"   && <IndirectCostsTab />}
-        </div>
+        {(activeTab === "budget" || activeTab === "gantt") ? (
+          <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", width: "100%" }}>
+            {activeTab === "budget" && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
+            {activeTab === "gantt"  && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
+          </div>
+        ) : (
+          <div className="px-3 py-4 md:px-6 md:py-6" style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+            {activeTab === "apu"     && <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />}
+            {activeTab === "takeoff" && <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />}
+            {activeTab === "reports" && <ReportsTab />}
+            {activeTab === "costs"   && <IndirectCostsTab />}
+          </div>
+        )}
       </div>
 
       {/* ── Indirect costs panel ─────────────────────── */}

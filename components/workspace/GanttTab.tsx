@@ -18,7 +18,7 @@ import type { GanttTask, GanttTaskInsert } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MIN_WEEKS = 12;
+const MIN_WEEKS = 24;
 
 const BAR_COLORS = [
   "#f97316", "#14b8a6", "#3b82f6", "#8b5cf6",
@@ -68,7 +68,7 @@ const LEFT_W = 280;
 const ACTION_W = 56;
 
 // Zoom: minimum pixels per week column (0 = auto-fit)
-const ZOOM_STEPS = [0, 22, 32, 48, 68, 96] as const;
+const ZOOM_STEPS = [0, 26, 36, 52, 72, 100] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1044,7 +1044,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         <Lock className="h-3 w-3" /> {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
       </TBadge>
     </ToolbarPortal>
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" style={{ width: "100%", padding: "12px 16px", overflowY: "auto" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
