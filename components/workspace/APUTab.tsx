@@ -1517,7 +1517,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
       </ToolbarPortal>
     <div className="flex flex-col h-full">
       {/* Header + summary */}
-      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
         <div>
           <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
             {lang === "es" ? "Análisis de Precio Unitario" : "Unit Price Analysis"}
@@ -1536,33 +1536,159 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
             )}
           </div>
         </div>
-        {/* Category filter */}
-        {usedCategories.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="font-dm-sans"
-              style={{
-                background: "rgba(255,255,255,0.04)", border: `1px solid ${CS.border}`,
-                borderRadius: 8, color: categoryFilter ? CS.text : CS.muted,
-                fontSize: 12, padding: "4px 8px", outline: "none", cursor: "pointer",
-              }}
-            >
-              <option value="">{lang === "es" ? "Todas las categorías" : "All categories"}</option>
-              {usedCategories.map((c) => (
-                <option key={c} value={c}>{getCategoryLabel(c, lang)}</option>
-              ))}
-            </select>
-            {categoryFilter && (
-              <button onClick={() => setCategoryFilter("")}
-                style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted, display: "flex", alignItems: "center" }}>
+      </div>
+
+      {/* ── Top toolbar ────────────────────────────────────── */}
+      {items.length > 0 && (
+        <div
+          className="flex items-center gap-2 mb-3 px-3 py-2 rounded-[10px]"
+          style={{ border: `1px solid ${CS.border}`, background: CS.surface }}
+        >
+          {/* Category filter */}
+          {usedCategories.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="font-dm-sans"
+                style={{
+                  background: "rgba(255,255,255,0.04)", border: `1px solid ${CS.border}`,
+                  borderRadius: 8, color: categoryFilter ? CS.text : CS.muted,
+                  fontSize: 12, padding: "4px 8px", outline: "none", cursor: "pointer",
+                }}
+              >
+                <option value="">{lang === "es" ? "Todas las categorías" : "All categories"}</option>
+                {usedCategories.map((c) => (
+                  <option key={c} value={c}>{getCategoryLabel(c, lang)}</option>
+                ))}
+              </select>
+              {categoryFilter && (
+                <button onClick={() => setCategoryFilter("")}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted, display: "flex", alignItems: "center" }}>
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="w-px self-stretch" style={{ background: CS.border }} />
+
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1" style={{ maxWidth: 280 }}>
+            <Search className="h-3.5 w-3.5 shrink-0" style={{ color: CS.muted }} />
+            <input
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder={lang === "es" ? "Buscar APUs..." : "Search APUs..."}
+              className="flex-1 bg-transparent text-sm font-dm-sans outline-none"
+              style={{ color: CS.text }}
+            />
+            {search && (
+              <button onClick={() => onSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}>
                 <X className="h-3 w-3" />
               </button>
             )}
           </div>
-        )}
-      </div>
+
+          <div className="w-px self-stretch" style={{ background: CS.border }} />
+
+          {/* Edit selected */}
+          <button
+            type="button"
+            onClick={() => selectedItem && onEdit(selectedItem)}
+            disabled={!selectedItem}
+            title={lang === "es" ? "Editar seleccionado" : "Edit selected"}
+            className="flex items-center justify-center rounded-lg"
+            style={{
+              width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
+              cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? CS.text : CS.muted,
+              opacity: selectedItem ? 1 : 0.4,
+            }}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Duplicate selected */}
+          <button
+            type="button"
+            onClick={() => selectedItem && onDuplicate(selectedItem)}
+            disabled={!selectedItem}
+            title={lang === "es" ? "Duplicar seleccionado" : "Duplicate selected"}
+            className="flex items-center justify-center rounded-lg"
+            style={{
+              width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
+              cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? CS.text : CS.muted,
+              opacity: selectedItem ? 1 : 0.4,
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+
+          {/* Delete selected */}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-dm-sans" style={{ color: "#ef4444" }}>
+                {lang === "es" ? "¿Eliminar?" : "Delete?"}
+              </span>
+              <button onClick={handleDeleteSelected}
+                className="text-xs font-dm-sans px-2 py-1 rounded-lg"
+                style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "none", cursor: "pointer" }}>
+                {lang === "es" ? "Sí" : "Yes"}
+              </button>
+              <button onClick={() => setConfirmDelete(false)}
+                className="text-xs font-dm-sans px-2 py-1 rounded-lg"
+                style={{ background: "none", color: CS.muted, border: `1px solid ${CS.border}`, cursor: "pointer" }}>
+                {lang === "es" ? "No" : "No"}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => selectedItem && setConfirmDelete(true)}
+              disabled={!selectedItem}
+              title={lang === "es" ? "Eliminar seleccionado" : "Delete selected"}
+              className="flex items-center justify-center rounded-lg"
+              style={{
+                width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
+                cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? "#ef4444" : CS.muted,
+                opacity: selectedItem ? 1 : 0.4,
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+
+          <div className="w-px self-stretch" style={{ background: CS.border }} />
+
+          {/* Send to Budget */}
+          <button
+            type="button"
+            onClick={() => selectedItem && onSendToBudget(selectedItem)}
+            disabled={!selectedItem}
+            title={lang === "es" ? "Enviar al Presupuesto Actual" : "Send to Current Budget"}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-dm-sans font-semibold"
+            style={{
+              background: selectedItem ? CS.accent : "rgba(249,115,22,0.15)",
+              color: selectedItem ? "#fff" : CS.muted,
+              border: "none",
+              cursor: selectedItem ? "pointer" : "not-allowed",
+              opacity: selectedItem ? 1 : 0.5,
+              whiteSpace: "nowrap",
+            }}
+          >
+            <Send className="h-3.5 w-3.5" />
+            {lang === "es" ? "Enviar al Presupuesto" : "Send to Budget"}
+          </button>
+
+          <div className="flex-1" />
+
+          {selectedItem && (
+            <span className="text-xs font-dm-sans hidden md:inline" style={{ color: CS.muted }}>
+              {lang === "es" ? "Seleccionado:" : "Selected:"} <code style={{ color: CS.accent }}>{selectedItem.code}</code>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Empty state */}
       {items.length === 0 && (
@@ -1656,117 +1782,7 @@ function APUList({ items, language, fmt, selectedId, search, onSelect, onNew, on
         </div>
       )}
 
-      {/* ── Bottom toolbar ─────────────────────────────────── */}
-      {items.length > 0 && (
-        <div
-          className="flex items-center gap-2 mt-3 px-3 py-2 rounded-[10px]"
-          style={{ border: `1px solid ${CS.border}`, background: CS.surface }}
-        >
-          {/* + New */}
-          <button
-            type="button"
-            onClick={onNew}
-            title={lang === "es" ? "Nuevo APU" : "New APU"}
-            className="flex items-center justify-center rounded-lg"
-            style={{ width: 30, height: 30, background: CS.accent, border: "none", cursor: "pointer", color: "#fff" }}
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-
-          {/* Edit selected */}
-          <button
-            type="button"
-            onClick={() => selectedItem && onEdit(selectedItem)}
-            disabled={!selectedItem}
-            title={lang === "es" ? "Editar seleccionado" : "Edit selected"}
-            className="flex items-center justify-center rounded-lg"
-            style={{
-              width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
-              cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? CS.text : CS.muted,
-              opacity: selectedItem ? 1 : 0.4,
-            }}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-
-          {/* Duplicate selected */}
-          <button
-            type="button"
-            onClick={() => selectedItem && onDuplicate(selectedItem)}
-            disabled={!selectedItem}
-            title={lang === "es" ? "Duplicar seleccionado" : "Duplicate selected"}
-            className="flex items-center justify-center rounded-lg"
-            style={{
-              width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
-              cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? CS.text : CS.muted,
-              opacity: selectedItem ? 1 : 0.4,
-            }}
-          >
-            <Copy className="h-3.5 w-3.5" />
-          </button>
-
-          {/* Delete selected */}
-          {confirmDelete ? (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-dm-sans" style={{ color: "#ef4444" }}>
-                {lang === "es" ? "¿Eliminar?" : "Delete?"}
-              </span>
-              <button onClick={handleDeleteSelected}
-                className="text-xs font-dm-sans px-2 py-1 rounded-lg"
-                style={{ background: "rgba(239,68,68,0.15)", color: "#ef4444", border: "none", cursor: "pointer" }}>
-                {lang === "es" ? "Sí" : "Yes"}
-              </button>
-              <button onClick={() => setConfirmDelete(false)}
-                className="text-xs font-dm-sans px-2 py-1 rounded-lg"
-                style={{ background: "none", color: CS.muted, border: `1px solid ${CS.border}`, cursor: "pointer" }}>
-                {lang === "es" ? "No" : "No"}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => selectedItem && setConfirmDelete(true)}
-              disabled={!selectedItem}
-              title={lang === "es" ? "Eliminar seleccionado" : "Delete selected"}
-              className="flex items-center justify-center rounded-lg"
-              style={{
-                width: 30, height: 30, background: "none", border: `1px solid ${CS.border}`,
-                cursor: selectedItem ? "pointer" : "not-allowed", color: selectedItem ? "#ef4444" : CS.muted,
-                opacity: selectedItem ? 1 : 0.4,
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          <div className="w-px self-stretch" style={{ background: CS.border }} />
-
-          {/* Search */}
-          <div className="flex items-center gap-2 flex-1" style={{ maxWidth: 280 }}>
-            <Search className="h-3.5 w-3.5 shrink-0" style={{ color: CS.muted }} />
-            <input
-              value={search}
-              onChange={(e) => onSearch(e.target.value)}
-              placeholder={lang === "es" ? "Buscar APUs..." : "Search APUs..."}
-              className="flex-1 bg-transparent text-sm font-dm-sans outline-none"
-              style={{ color: CS.text }}
-            />
-            {search && (
-              <button onClick={() => onSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: CS.muted }}>
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1" />
-
-          {selectedItem && (
-            <span className="text-xs font-dm-sans" style={{ color: CS.muted }}>
-              {lang === "es" ? "Seleccionado:" : "Selected:"} <code style={{ color: CS.accent }}>{selectedItem.code}</code>
-            </span>
-          )}
-        </div>
-      )}
+      {/* Bottom toolbar removed — actions moved to top toolbar */}
 
       {/* Confirm delete dialog */}
       {confirmDelete && (
