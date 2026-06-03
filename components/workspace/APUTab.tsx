@@ -1834,64 +1834,50 @@ function SendToBudgetModal({
   onClose: () => void;
 }) {
   const supabase = createClient();
+  const hasCategory = !!item.category;
+  const [useOriginalCategory, setUseOriginalCategory] = useState(hasCategory);
   const [sectionMode, setSectionMode] = useState<"existing" | "new">("existing");
   const [selectedSection, setSelectedSection] = useState("");
   const [newSection, setNewSection] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  const [quantity, setQuantity] = useState("0");
   const [saving, setSaving] = useState(false);
-  const [existingSections, setExistingSections] = useState<string[]>([]);
+  const [existingChapters, setExistingChapters] = useState<string[]>([]);
   const lang = language;
   const qty = parseFloat(quantity) || 0;
   const estimatedTotal = qty * item.selling_price;
 
   useEffect(() => {
-    async function loadSections() {
+    async function loadChapters() {
       const { data } = await supabase
         .from("budget_rows")
         .select("section")
-        .eq("project_id", projectId);
+        .eq("project_id", projectId)
+        .eq("is_chapter", true)
+        .order("sort_order");
       if (data) {
-        const seen = new Set<string>();
-        const unique: string[] = [];
-        for (const r of data as { section: string }[]) {
-          const trimmed = r.section.trim();
-          if (trimmed && !seen.has(trimmed)) { seen.add(trimmed); unique.push(trimmed); }
-        }
-        setExistingSections(unique);
-
-        // Pre-fill section from APU category
-        if (item.category) {
-          const catLabel = getCategoryLabel(item.category, language);
-          const match = unique.find(
-            (s) => s.toUpperCase() === item.category!.toUpperCase() || s.toUpperCase() === catLabel.toUpperCase()
-          );
-          if (match) {
-            setSelectedSection(match);
-            setSectionMode("existing");
-          } else {
-            setNewSection(item.category);
-            setSectionMode(unique.length > 0 ? "existing" : "new");
-          }
-        } else if (unique.length > 0) {
-          setSelectedSection(unique[0]);
-        } else {
-          setSectionMode("new");
-        }
+        const unique = Array.from(new Set((data as { section: string }[]).map((r) => r.section.trim()).filter(Boolean)));
+        setExistingChapters(unique);
+        if (unique.length > 0 && !selectedSection) setSelectedSection(unique[0]);
+        if (unique.length === 0 && !hasCategory) setSectionMode("new");
       }
     }
-    loadSections();
+    loadChapters();
     function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [projectId, onClose]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const effectiveSection = sectionMode === "new" ? newSection.trim() : selectedSection.trim();
-  const isNewChapter = sectionMode === "new" && !!newSection.trim();
+  const effectiveSection = useOriginalCategory && hasCategory
+    ? item.category!
+    : sectionMode === "new" ? newSection.trim() : selectedSection.trim();
+  const isNewChapter = useOriginalCategory
+    ? !existingChapters.some((s) => s.toUpperCase() === item.category?.toUpperCase())
+    : sectionMode === "new" && !!newSection.trim();
 
   async function handleSubmit() {
     if (!effectiveSection) return;
     setSaving(true);
-    await onConfirm(item, effectiveSection, qty || 1, isNewChapter);
+    await onConfirm(item, effectiveSection, qty, isNewChapter);
     setSaving(false);
   }
 
@@ -1939,41 +1925,82 @@ function SendToBudgetModal({
           </p>
         </div>
 
-        {/* Chapter / Section */}
+        {/* Use original category checkbox */}
         <div>
-          <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 500, color: CS.muted, fontFamily: "var(--font-dm-sans)", marginBottom: 4 }}>
-            {lang === "es" ? "Capítulo / Sección" : "Chapter / Section"} *
-          </label>
-          {sectionMode === "new" ? (
-            <div className="flex gap-2 items-center">
-              <input
-                style={fieldStyle}
-                value={newSection}
-                onChange={(e) => setNewSection(e.target.value)}
-                placeholder={lang === "es" ? "Ej. 03 · CONCRETO" : "E.g. 03 · CONCRETE"}
-                autoFocus
-              />
-              {existingSections.length > 0 && (
-                <button type="button" onClick={() => { setSectionMode("existing"); setSelectedSection(existingSections[0]); }}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: CS.accent, fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap" }}>
-                  {lang === "es" ? "Existente" : "Existing"}
-                </button>
-              )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              id="useOriginalCategory"
+              checked={useOriginalCategory}
+              disabled={!hasCategory}
+              onChange={(e) => setUseOriginalCategory(e.target.checked)}
+              style={{ accentColor: "#f97316", width: 16, height: 16, cursor: hasCategory ? "pointer" : "not-allowed" }}
+            />
+            <label htmlFor="useOriginalCategory" className="font-dm-sans" style={{
+              fontSize: 13, cursor: hasCategory ? "pointer" : "default",
+              color: hasCategory ? CS.text : CS.muted,
+            }}>
+              {lang === "es" ? "Usar categoría original del APU" : "Use original APU category"}
+            </label>
+          </div>
+
+          {/* No-category warning */}
+          {!hasCategory && (
+            <p className="font-dm-sans" style={{ fontSize: 12, color: "#f59e0b", margin: "4px 0 8px", paddingLeft: 24 }}>
+              {lang === "es"
+                ? "⚠ Este APU no tiene categoría. Por favor selecciona un capítulo."
+                : "⚠ This APU has no category. Please select a chapter."}
+            </p>
+          )}
+
+          {/* Show original category preview */}
+          {useOriginalCategory && hasCategory && (
+            <div className="font-dm-sans" style={{
+              padding: "8px 12px", background: "rgba(249,115,22,0.08)",
+              borderRadius: 6, fontSize: 12, color: "#f97316", marginTop: 8,
+            }}>
+              {lang === "es" ? "Capítulo:" : "Chapter:"} {item.category}
             </div>
-          ) : (
-            <select
-              style={fieldStyle}
-              value={selectedSection}
-              onChange={(e) => {
-                if (e.target.value === "__new__") { setSectionMode("new"); setNewSection(""); }
-                else setSelectedSection(e.target.value);
-              }}
-            >
-              {existingSections.map((s) => <option key={s} value={s}>{s}</option>)}
-              <option value="__new__">{lang === "es" ? "+ Nuevo capítulo..." : "+ New chapter..."}</option>
-            </select>
           )}
         </div>
+
+        {/* Chapter / Section dropdown (shown when NOT using original category) */}
+        {!useOriginalCategory && (
+          <div>
+            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 500, color: CS.muted, fontFamily: "var(--font-dm-sans)", marginBottom: 4 }}>
+              {lang === "es" ? "Capítulo / Sección" : "Chapter / Section"} *
+            </label>
+            {sectionMode === "new" ? (
+              <div className="flex gap-2 items-center">
+                <input
+                  style={fieldStyle}
+                  value={newSection}
+                  onChange={(e) => setNewSection(e.target.value)}
+                  placeholder={lang === "es" ? "Ej. 03 · CONCRETO" : "E.g. 03 · CONCRETE"}
+                  autoFocus
+                />
+                {existingChapters.length > 0 && (
+                  <button type="button" onClick={() => { setSectionMode("existing"); setSelectedSection(existingChapters[0]); }}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: CS.accent, fontSize: "0.75rem", fontFamily: "var(--font-dm-sans)", whiteSpace: "nowrap" }}>
+                    {lang === "es" ? "Existente" : "Existing"}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <select
+                style={fieldStyle}
+                value={selectedSection}
+                onChange={(e) => {
+                  if (e.target.value === "__new__") { setSectionMode("new"); setNewSection(""); }
+                  else setSelectedSection(e.target.value);
+                }}
+              >
+                {existingChapters.map((s) => <option key={s} value={s}>{s}</option>)}
+                <option value="__new__">{lang === "es" ? "+ Nuevo capítulo..." : "+ New chapter..."}</option>
+              </select>
+            )}
+          </div>
+        )}
 
         {/* Quantity */}
         <div>
