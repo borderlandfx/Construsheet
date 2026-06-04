@@ -41,6 +41,7 @@ import APULibraryModal from "@/components/workspace/APULibraryModal";
 import RowHistoryPanel from "@/components/workspace/RowHistoryPanel";
 import { usePlan } from "@/lib/hooks/usePlan";
 import UpgradePrompt from "@/components/ui/UpgradePrompt";
+import { useMiddleClickScroll } from "@/lib/hooks/useMiddleClickScroll";
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -1532,6 +1533,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
   const { projectId, language, fmt, setActiveTab, userId, budgetRows: rows, setBudgetRows: setRows } = useWorkspace();
   const { toast } = useToast();
   const { can } = usePlan(userId);
+  const budgetRef = useMiddleClickScroll();
   const [upgradePrompt, setUpgradePrompt] = useState<{ feature: string; description: string } | null>(null);
 
   const sensors = useSensors(
@@ -2449,7 +2451,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "+ Agregar" : "+ Add Item"}
       </TBtnPrimary>
     </ToolbarPortal>
-    <div className="flex flex-col gap-4" style={{ padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%", overflowY: "auto" }}>
+    <div ref={budgetRef} className="flex flex-col gap-4" style={{ padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%", overflowY: "auto", overflowX: "auto", flex: 1, height: "100%" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>

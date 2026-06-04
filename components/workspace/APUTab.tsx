@@ -25,6 +25,7 @@ import type { Locale } from "@/lib/utils/i18n";
 import { useAIAPU } from "@/lib/hooks/useAIAPU";
 import { usePlan } from "@/lib/hooks/usePlan";
 import UpgradePrompt from "@/components/ui/UpgradePrompt";
+import { useMiddleClickScroll } from "@/lib/hooks/useMiddleClickScroll";
 
 // ─── APU Chapter Categories ──────────────────────────────────────────────────
 
@@ -2081,6 +2082,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
   const { projectId, language, currency, fmt, projectSettings, setActiveTab, userId } = useWorkspace();
   const { toast } = useToast();
   const { can } = usePlan(userId);
+  const apuRef = useMiddleClickScroll();
   const [items, setItems]   = useState<ApuItem[]>(initialItems);
   const [view, setView]     = useState<View>({ kind: "list" });
   const [showLibrary, setShowLibrary] = useState(false);
@@ -2365,7 +2367,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
   }
 
   return (
-    <>
+    <div ref={apuRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", width: "100%" }}>
       {view.kind === "list" && (
         <APUList
           items={filteredItems}
@@ -2477,7 +2479,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
           onClose={() => setUpgradePrompt(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 

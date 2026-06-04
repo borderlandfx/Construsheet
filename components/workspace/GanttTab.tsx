@@ -16,6 +16,7 @@ import { useToast } from "@/lib/context/ToastContext";
 import { t } from "@/lib/utils/i18n";
 import type { GanttTask, GanttTaskInsert } from "@/lib/types/database.types";
 import type { Locale } from "@/lib/utils/i18n";
+import { useMiddleClickScroll } from "@/lib/hooks/useMiddleClickScroll";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const MIN_WEEKS = 24;
@@ -468,6 +469,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
   const supabase = createClient();
   const { projectId, language, setActiveTab } = useWorkspace();
   const { toast } = useToast();
+  const ganttRef = useMiddleClickScroll();
 
   const [tasks, setTasks] = useState<GanttTask[]>(
     [...initialTasks].sort((a, b) => a.sort_order - b.sort_order)
@@ -1044,7 +1046,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         <Lock className="h-3 w-3" /> {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
       </TBadge>
     </ToolbarPortal>
-    <div className="flex flex-col gap-4" style={{ width: "100%", padding: "12px 16px", overflowY: "auto" }}>
+    <div ref={ganttRef} className="flex flex-col gap-4" style={{ width: "100%", padding: "12px 16px", overflowX: "auto", overflowY: "auto", flex: 1, height: "100%", WebkitOverflowScrolling: "touch" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
