@@ -2451,7 +2451,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "+ Agregar" : "+ Add Item"}
       </TBtnPrimary>
     </ToolbarPortal>
-    <div ref={budgetRef} className="force-scroll" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%", flex: 1, minHeight: 0 }}>
+    <div ref={budgetRef} className="force-scroll" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", flex: 1, minHeight: 0 }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
@@ -2585,9 +2585,9 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
       {/* ── Budget table ───────────────────────────────────── */}
       {rows.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="rounded-[10px]" style={{ border: `1px solid ${CS.border}` }}>
-          <div>
-            <table className="w-full font-dm-sans" style={{ minWidth: 1400, borderCollapse: "collapse" }}>
+        <div className="rounded-[10px]" style={{ border: `1px solid ${CS.border}`, minWidth: 1400 }}>
+          <div style={{ minWidth: 1400 }}>
+            <table className="font-dm-sans" style={{ minWidth: 1400, borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   <th style={{ ...thStyle, width: 32 }}></th>
