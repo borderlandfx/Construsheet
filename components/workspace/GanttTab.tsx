@@ -1046,7 +1046,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         <Lock className="h-3 w-3" /> {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
       </TBadge>
     </ToolbarPortal>
-    <div ref={ganttRef} className="workspace-scroll-area" style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", padding: "12px 16px" }}>
+    <div ref={ganttRef} className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", padding: "12px 16px" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

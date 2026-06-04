@@ -2451,7 +2451,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "+ Agregar" : "+ Add Item"}
       </TBtnPrimary>
     </ToolbarPortal>
-    <div ref={budgetRef} className="workspace-scroll-area" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%" }}>
+    <div ref={budgetRef} className="workspace-scroll" style={{ display: "flex", flexDirection: "column", gap: 16, padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%" }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
@@ -2587,7 +2587,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="rounded-[10px]" style={{ border: `1px solid ${CS.border}` }}>
           <div>
-            <table className="w-full font-dm-sans" style={{ minWidth: 1100, borderCollapse: "collapse" }}>
+            <table className="w-full font-dm-sans" style={{ minWidth: 1200, borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   <th style={{ ...thStyle, width: 32 }}></th>
