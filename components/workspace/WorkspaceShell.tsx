@@ -315,11 +315,20 @@ function WorkspaceInner({
 
       {/* ── Tab content (scrollable) ─────────────────── */}
       <div
-        className="flex-1"
-        style={{ background: "var(--cs-bg)", display: "flex", flexDirection: "column", width: "100%", overflowY: "auto", overflowX: "auto", height: "100%" }}
+        className="scroll-container"
+        style={{
+          flex: 1,
+          overflow: "auto",
+          height: 0,
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          width: "100%",
+          background: "var(--cs-bg)",
+        }}
       >
         {(activeTab === "budget" || activeTab === "gantt") ? (
-          <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", width: "100%", height: "100%" }}>
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", width: "100%", overflow: "hidden", height: "100%", minHeight: 0 }}>
             {activeTab === "budget" && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
             {activeTab === "gantt"  && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
           </div>

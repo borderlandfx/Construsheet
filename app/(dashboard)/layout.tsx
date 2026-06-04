@@ -52,7 +52,7 @@ export default async function DashboardLayout({
         {/* Content area — each page handles its own scrolling and padding */}
         <main
           className="flex-1 overflow-hidden flex flex-col min-w-0"
-          style={{ background: "var(--cs-bg)" }}
+          style={{ background: "var(--cs-bg)", height: 0, minHeight: 0 }}
         >
           {children}
         </main>

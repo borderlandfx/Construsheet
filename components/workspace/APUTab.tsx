@@ -2367,7 +2367,7 @@ export default function APUTab({ initialItems, onCountChange }: APUTabProps) {
   }
 
   return (
-    <div ref={apuRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", width: "100%" }}>
+    <div ref={apuRef} className="scroll-container" style={{ flex: 1, overflow: "auto", height: 0, minHeight: 0, width: "100%" }}>
       {view.kind === "list" && (
         <APUList
           items={filteredItems}

@@ -2451,7 +2451,7 @@ export default function BudgetTab({ initialRows: _initialRows, apuItems: initial
         <Plus className="h-3.5 w-3.5" /> {lang === "es" ? "+ Agregar" : "+ Add Item"}
       </TBtnPrimary>
     </ToolbarPortal>
-    <div ref={budgetRef} className="flex flex-col gap-4" style={{ padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%", overflowY: "auto", overflowX: "auto", flex: 1, height: "100%" }}>
+    <div ref={budgetRef} className="scroll-container flex flex-col gap-4" style={{ padding: "12px 16px", paddingRight: panelOpen ? 408 : 16, transition: "padding-right 200ms ease", width: "100%", overflow: "auto", flex: 1, height: 0, minHeight: 0 }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="font-syne font-bold text-lg" style={{ color: CS.text }}>
