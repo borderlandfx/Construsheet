@@ -223,7 +223,7 @@ function WorkspaceInner({
 
   return (
     <div
-      style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--cs-bg)" }}
+      style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--cs-bg)", minWidth: 0 }}
     >
       {/* ── Top bar ─────────────────────────────────── */}
       <div
@@ -313,7 +313,7 @@ function WorkspaceInner({
       <ContextualToolbar />
 
       {/* ── Tab content — each tab handles its own scroll ── */}
-      <div className="flex-1 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
+      <div className="flex-1 overflow-hidden flex flex-col" style={{ minHeight: 0, minWidth: 0 }}>
         {activeTab === "budget" && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
         {activeTab === "gantt"  && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
         {activeTab === "apu" && (

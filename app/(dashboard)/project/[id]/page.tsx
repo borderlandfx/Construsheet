@@ -74,7 +74,7 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   ) as ProjectIndirectCosts | undefined;
 
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
       <WorkspaceShell
         project={project}
         apuItems={(apuItems as ApuItem[]) ?? []}
