@@ -74,17 +74,19 @@ export default async function ProjectPage({ params }: ProjectPageProps) {
   ) as ProjectIndirectCosts | undefined;
 
   return (
-    <WorkspaceShell
-      project={project}
-      apuItems={(apuItems as ApuItem[]) ?? []}
-      budgetRows={(budgetRows as BudgetRow[]) ?? []}
-      ganttTasks={(ganttTasks as GanttTask[]) ?? []}
-      takeoffItems={(takeoffItems as TakeoffItem[]) ?? []}
-      userId={user.id}
-      userEmail={user.email ?? ""}
-      initialCurrency={initialCurrency}
-      initialLanguage={initialLanguage}
-      initialSettings={initialSettings}
-    />
+    <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <WorkspaceShell
+        project={project}
+        apuItems={(apuItems as ApuItem[]) ?? []}
+        budgetRows={(budgetRows as BudgetRow[]) ?? []}
+        ganttTasks={(ganttTasks as GanttTask[]) ?? []}
+        takeoffItems={(takeoffItems as TakeoffItem[]) ?? []}
+        userId={user.id}
+        userEmail={user.email ?? ""}
+        initialCurrency={initialCurrency}
+        initialLanguage={initialLanguage}
+        initialSettings={initialSettings}
+      />
+    </div>
   );
 }

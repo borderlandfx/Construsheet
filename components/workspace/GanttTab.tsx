@@ -1046,7 +1046,7 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
         <Lock className="h-3 w-3" /> {lang === "es" ? "Sincronizado con Presupuesto" : "Synced from Budget"}
       </TBadge>
     </ToolbarPortal>
-    <div ref={ganttRef} className="scroll-container flex flex-col gap-4" style={{ width: "100%", padding: "12px 16px", overflow: "auto", flex: 1, height: 0, minHeight: 0 }}>
+    <div ref={ganttRef} className="construsheet-scroll" style={{ display: "flex", flexDirection: "column", gap: 16, width: "100%", padding: "12px 16px", overflow: "auto", flex: 1, minHeight: 0 }}>
       {/* ── Header ─────────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -1208,7 +1208,8 @@ export default function GanttTab({ initialTasks, projectCreatedAt, onCountChange
       {/* ── Gantt chart (desktop) ─────────────────────────── */}
       {tasks.length > 0 && (
         <div
-          className="rounded-[10px] overflow-hidden overflow-x-auto hidden sm:block"
+          className="rounded-[10px] hidden sm:block"
+          // overflow handled by parent scroll container
           style={{ border: "1px solid var(--color-border-tertiary)", background: "var(--color-background-tertiary)" }}
         >
           {/* Column headers */}

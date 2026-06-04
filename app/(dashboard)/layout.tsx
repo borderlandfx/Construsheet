@@ -31,7 +31,7 @@ export default async function DashboardLayout({
   const locale = (profile?.language ?? "es") as Locale;
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--cs-bg)" }}>
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "var(--cs-bg)" }}>
       {/* Sidebar — static flex child on desktop, overlay on mobile */}
       <Sidebar
         userId={user.id}
@@ -41,7 +41,7 @@ export default async function DashboardLayout({
       />
 
       {/* Right column: navbar + content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
         <Navbar
           user={user}
           projectCount={count ?? 0}
@@ -49,11 +49,8 @@ export default async function DashboardLayout({
           fullName={profile?.full_name}
         />
 
-        {/* Content area — each page handles its own scrolling and padding */}
-        <main
-          className="flex-1 overflow-hidden flex flex-col min-w-0"
-          style={{ background: "var(--cs-bg)", height: 0, minHeight: 0 }}
-        >
+        {/* Content area — each page handles its own scrolling */}
+        <main style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", minHeight: 0 }}>
           {children}
         </main>
       </div>
