@@ -39,8 +39,8 @@ export function useMiddleClickScroll() {
       })
     }
 
-    const onMouseUp = (e: MouseEvent) => {
-      if (e.button !== 1) return
+    const onMouseUp = () => {
+      if (!isScrolling) return
       isScrolling = false
       el.style.cursor = ''
     }
