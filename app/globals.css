@@ -214,6 +214,29 @@
 .construsheet-scroll::-webkit-scrollbar-thumb { background: #52525b; border-radius: 20px; }
 .construsheet-scroll::-webkit-scrollbar-thumb:hover { background: #71717a; }
 
+.workspace-scroll-area {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #52525b #27272a;
+}
+
+.workspace-scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.workspace-scroll-area::-webkit-scrollbar-thumb {
+  background: #52525b;
+  border-radius: 20px;
+}
+
+.workspace-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: #71717a;
+}
+
 .scroll-x {
   overflow-x: auto !important;
   overflow-y: hidden;

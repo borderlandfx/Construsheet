@@ -328,7 +328,7 @@ function WorkspaceInner({
             {activeTab === "gantt"  && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
           </>
         ) : (
-          <div className="construsheet-scroll px-3 py-4 md:px-6 md:py-6" style={{ flex: 1, minHeight: 0, overflow: "auto", width: "100%" }}>
+          <div className="workspace-scroll-area px-3 py-4 md:px-6 md:py-6" style={{ width: "100%" }}>
             <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
               {activeTab === "apu"     && <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />}
               {activeTab === "takeoff" && <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />}

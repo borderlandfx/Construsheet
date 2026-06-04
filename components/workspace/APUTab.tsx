@@ -1123,8 +1123,8 @@ function APUListRow({ item, language: _language, fmt, selected, onSelect, onEdit
       <td className="px-4 py-3 hidden md:table-cell">
         <code className="text-xs font-mono" style={{ color: CS.accent }}>{item.code}</code>
       </td>
-      <td className="px-3 py-3">
-        <span className="text-sm font-dm-sans truncate block" style={{ color: CS.text }}>{item.description}</span>
+      <td className="px-3 py-3" style={{ minWidth: 200, maxWidth: 400 }}>
+        <span className="text-sm font-dm-sans block" style={{ color: CS.text, whiteSpace: "normal", wordBreak: "break-word", overflowWrap: "break-word" }}>{item.description}</span>
         <span className="text-xs font-dm-sans md:hidden" style={{ color: CS.muted }}>{item.code} · {item.unit}</span>
       </td>
       <td className="px-3 py-3 hidden md:table-cell">
