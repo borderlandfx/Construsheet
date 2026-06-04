@@ -313,27 +313,34 @@ function WorkspaceInner({
       <ContextualToolbar />
 
       {/* ── Tab content — each tab handles its own scroll ── */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {(activeTab === "budget" || activeTab === "gantt") ? (
-          <>
-            {activeTab === "budget" && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
-            {activeTab === "gantt"  && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
-          </>
-        ) : (
-          <div className="workspace-scroll px-3 py-4 md:px-6 md:py-6" style={{ width: "100%" }}>
+      <div className="flex-1 overflow-hidden flex flex-col" style={{ minHeight: 0 }}>
+        {activeTab === "budget" && <BudgetTab initialRows={budgetRows} apuItems={apuItems} onCountChange={(n) => setTabCount("budget", n)} />}
+        {activeTab === "gantt"  && <GanttTab initialTasks={ganttTasks} projectCreatedAt={project.created_at} onCountChange={(n) => setTabCount("gantt", n)} />}
+        {activeTab === "apu" && (
+          <div className="force-scroll px-3 py-4 md:px-6 md:py-6" style={{ flex: 1, minHeight: 0, width: "100%" }}>
             <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
-              {activeTab === "apu"     && <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />}
-              {activeTab === "takeoff" && <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />}
-              {activeTab === "reports" && <ReportsTab />}
-              {activeTab === "costs"   && <IndirectCostsTab />}
+              <APUTab initialItems={apuItems} onCountChange={(n) => setTabCount("apu", n)} />
+            </div>
+          </div>
+        )}
+        {activeTab === "takeoff" && (
+          <div className="force-scroll px-3 py-4 md:px-6 md:py-6" style={{ flex: 1, minHeight: 0, width: "100%" }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+              <TakeoffTab initialItems={takeoffItems} onCountChange={(n) => setTabCount("takeoff", n)} />
+            </div>
+          </div>
+        )}
+        {activeTab === "reports" && (
+          <div className="force-scroll px-3 py-4 md:px-6 md:py-6" style={{ flex: 1, minHeight: 0, width: "100%" }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+              <ReportsTab />
+            </div>
+          </div>
+        )}
+        {activeTab === "costs" && (
+          <div className="force-scroll px-3 py-4 md:px-6 md:py-6" style={{ flex: 1, minHeight: 0, width: "100%" }}>
+            <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+              <IndirectCostsTab />
             </div>
           </div>
         )}

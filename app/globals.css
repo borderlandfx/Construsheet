@@ -245,6 +245,50 @@
   background: #64748b;
 }
 
+/* Aggressive force-scroll — guarantees visible scrollbars */
+.force-scroll {
+  overflow: auto !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: #52525b #27272a !important;
+}
+
+.force-scroll::-webkit-scrollbar {
+  height: 10px !important;
+  width: 10px !important;
+  display: block !important;
+}
+
+.force-scroll::-webkit-scrollbar-track {
+  background: #27272a !important;
+}
+
+.force-scroll::-webkit-scrollbar-thumb {
+  background: #52525b !important;
+  border-radius: 10px !important;
+}
+
+.force-scroll::-webkit-scrollbar-thumb:hover {
+  background: #71717a !important;
+}
+
+.light .force-scroll {
+  scrollbar-color: #cbd5e1 #f1f5f9 !important;
+}
+
+.light .force-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+
+.light .force-scroll::-webkit-scrollbar-thumb {
+  background: #94a3b8 !important;
+}
+
+.light .force-scroll::-webkit-scrollbar-thumb:hover {
+  background: #64748b !important;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    Print styles — Executive Summary & Reports
    ═══════════════════════════════════════════════════════════════════ */
