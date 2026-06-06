@@ -16,7 +16,6 @@ import GanttTab from "@/components/workspace/GanttTab";
 import TakeoffTab from "@/components/workspace/TakeoffTab";
 import ReportsTab from "@/components/workspace/ReportsTab";
 import IndirectCostsTab from "@/components/workspace/IndirectCostsTab";
-import SummaryBar from "@/components/workspace/SummaryBar";
 import IndirectCostsPanel from "@/components/workspace/IndirectCostsPanel";
 import type { Project, ApuItem, BudgetRow, GanttTask, TakeoffItem, ProjectIndirectCosts } from "@/lib/types/database.types";
 import type { Currency } from "@/lib/utils/currency";
@@ -298,9 +297,6 @@ function WorkspaceInner({
         {/* Control bar */}
         <ControlBar userEmail={userEmail} userInitial={userInitial} />
       </div>
-
-      {/* ── Summary bar ──────────────────────────────── */}
-      <SummaryBar />
 
       {/* ── Tab bar ─────────────────────────────────── */}
       <TabBar
